@@ -3,21 +3,46 @@
 let playerWindow = null; // Variable to hold the reference to the player window
 
 Hooks.on("renderSceneControls", (app, html) => {
-  // Add a button to the Scene Controls to open the player screen
-  const button = $(`
-    <li class="scene-control" data-control="player-screen" title="Open Player Screen">
-      <i class="fas fa-tv"></i>
-      <span class="control-label">Player Screen</span>
-    </li>
+  console.log("renderSceneControls hook fired for IRLMod!"); // Add this line for debugging
+
+  // Create the list item (<li>) that will contain the button
+  // The li holds the data-control attribute
+  const listItem = $(`
+    <li class="scene-control" data-control="player-screen">
+      </li>
   `);
 
-  // Insert the button before the 'token' controls
-  html.find('.scene-control[data-control="token"]').before(button);
+  // Create the button (<button>) element with the icon inside
+  // The button holds the styling classes, tooltip, and action data
+  const button = $(`
+     <button type="button" class="control ui-control layer icon" role="tab" data-action="open-player-screen" data-tooltip="Player Screen" aria-pressed="false" aria-label="Open Player Screen">
+        <i class="fas fa-tv"></i>
+        </button>
+  `);
 
-  // Add event listener to the button
-  button.on("click", () => {
-    openPlayerScreen();
-  });
+  // Append the button to the list item
+  listItem.append(button);
+
+  console.log("Created list item with button:", listItem); // Log the created element
+
+  // Wrap html in $() to ensure it's a jQuery object before using .find()
+  // Corrected selector to find the <li> that contains the button with data-control="tokens"
+  const targetElement = $(html).find('li:has(button[data-control="tokens"])');
+  console.log("Found target element:", targetElement); // Log the found target element
+
+  if (targetElement.length > 0) {
+      // Insert the list item (containing the button) before the target element
+      targetElement.before(listItem);
+      console.log("List item with button inserted successfully."); // Log success
+
+      // Attach the event listener to the button element *inside* the list item
+      button.on("click", () => {
+        openPlayerScreen();
+      });
+  } else {
+      console.error("Could not find the target 'token' control <li> to insert the button before."); // Log failure
+      console.error("HTML received by hook:", html[0].outerHTML); // Log the received HTML for inspection
+  }
 });
 
 function openPlayerScreen() {
@@ -29,7 +54,8 @@ function openPlayerScreen() {
 
   // Define the URL for the player view HTML page
   // The path is relative to your module's root directory
-  const playerViewUrl = "modules/touchscreen-player-screen/player-view.html";
+  // Use your module's ID in the path
+  const playerViewUrl = "modules/irlmod/player-view.html"; // Corrected path
 
   // Window features: adjust size and position as needed
   // Positioning on a specific monitor is complex and OS/browser dependent.
