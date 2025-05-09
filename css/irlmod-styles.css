@@ -1,0 +1,49 @@
+/* IRLMod | css/irlmod-styles.css (v3.9 - Corrected Selectors) */
+
+html body.irlmod-player-view-active {
+    overflow: hidden !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+}
+
+/* --- Core UI Elements to Hide --- */
+html body.irlmod-player-view-active #sidebar,
+html body.irlmod-player-view-active #scene-navigation, 
+html body.irlmod-player-view-active nav.nav-tabs, 
+html body.irlmod-player-view-active #sidebar-tabs > nav.tabs, 
+html body.irlmod-player-view-active #sidebar-tabs, 
+html body.irlmod-player-view-active #hotbar,
+html body.irlmod-player-view-active #players,
+html body.irlmod-player-view-active #scene-controls, /* Corrected ID */
+html body.irlmod-player-view-active #logo,
+html body.irlmod-player-view-active #chat-log,
+html body.irlmod-player-view-active form.chat-form, /* Hides the form element */
+html body.irlmod-player-view-active textarea#chat-message, /* Hides the actual text input area */
+html body.irlmod-player-view-active .notification-tray,
+html body.irlmod-player-view-active #notifications,
+html body.irlmod-player-view-active #pause,
+html body.irlmod-player-view-active div.app.window-app { 
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* --- Adjusting the Game Canvas --- */
+html body.irlmod-player-view-active #board {
+    width: 100vw !important;
+    height: 100vh !important;
+    top: 0 !important;
+    left: 0 !important;
+    position: fixed !important;
+    background-color: black !important;
+    z-index: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+html body.irlmod-player-view-active #canvas {
+    width: 100% !important;
+    height: 100% !important;
+}

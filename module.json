@@ -1,20 +1,34 @@
 {
   "id": "irlmod",
   "title": "IRLMod",
-  "version": "0.0.3",
+  "version": "0.0.10",
   "compatibility": {
     "minimum": "13",
     "verified": "13"
   },
+  "authors": [
+    {
+      "name": "fynflood",
+      "email": "fynflood@gmail.com"
+    }
+  ],
   "url": "https://github.com/fynflood/IRLMod",
   "esmodules": [
-    "gmscreen.js" 
+    "gm-screen.js",
+    "player-client.js"
   ],
   "styles": [
-    "styles.css"
+    "css/irlmod-styles.css"
   ],
+"languages": [
+  {
+    "lang": "en",
+    "name": "English",
+    "path": "languages/en.json"
+  }
+],
   "scripts": [],
-  "styles": [],
+  "socket": true,
   "languages": [],
   "packs": [],
   "system": [],
