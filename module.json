@@ -1,15 +1,17 @@
 {
   "id": "irlmod",
   "title": "IRLMod",
-  "version": "0.0.10",
+  "description": "A module to display and manage a dedicated player view on a secondary touchscreen display for in-person games.",
+  "version": "0.2.0",
   "compatibility": {
-    "minimum": "13",
+    "minimum": "11", 
     "verified": "13"
   },
   "authors": [
     {
       "name": "fynflood",
-      "email": "fynflood@gmail.com"
+      "email": "fynflood@gmail.com",
+      "url": ""
     }
   ],
   "url": "https://github.com/fynflood/IRLMod",
@@ -20,21 +22,16 @@
   "styles": [
     "css/irlmod-styles.css"
   ],
-"languages": [
-  {
-    "lang": "en",
-    "name": "English",
-    "path": "languages/en.json"
-  }
-],
-  "scripts": [],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "languages/en.json"
+    }
+  ],
   "socket": true,
-  "languages": [],
-  "packs": [],
-  "system": [],
-  "dependencies": [],
-  "manifest": "", 
-  "download": "", 
+  "manifest": "",
+  "download": "",
   "protected": false,
   "license": "LICENSE.txt"
 }

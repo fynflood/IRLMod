@@ -3,33 +3,28 @@
 
 const PLAYER_WINDOW_NAME = "FoundryIRLPlayerView";
 const IRLMOD_SOCKET_NAME = "module.irlmod";
-// IMPORTANT: This should match the DEDICATED_PLAYER_USER_NAME in player-client.js
-const DEDICATED_PLAYER_USER_FOR_AUTOLOGIN = "ScreenGoblin"; // Or get from module settings
+const MODULE_ID = "irlmod"; // Module ID for settings
 
 let playerWindowRef = null;
+let dedicatedPlayerUsername = "ScreenGoblin"; // Default value
 
 /**
  * Handles the click event for the "Open Player View" button.
  */
 function launchOrFocusPlayerView() {
-    // Construct the URL to point to the /join screen to encourage a login prompt
-    // The parameter to prefill username on the join screen is typically 'username'
-    const joinUrl = `${window.location.origin}/join?username=${encodeURIComponent(DEDICATED_PLAYER_USER_FOR_AUTOLOGIN)}`;
-
+    dedicatedPlayerUsername = game.settings.get(MODULE_ID, "dedicatedPlayerUsername") || "ScreenGoblin";
+    const joinUrl = `${window.location.origin}/join?username=${encodeURIComponent(dedicatedPlayerUsername)}`;
     console.log(`IRLMod: Attempting to open URL for player login: ${joinUrl}`);
-
-    // Attempt to open the new window
     const newWindow = window.open(joinUrl, PLAYER_WINDOW_NAME, 'width=1280,height=720,noopener,noreferrer');
 
-    // Check the result of window.open
     if (newWindow) {
-        playerWindowRef = newWindow; // Store the reference if we got one
-        console.log("IRLMod: window.open successfully returned a window reference:", playerWindowRef);
-        ui.notifications.info(`IRLMod: Player View window opened (or an existing one was focused). It should show the login screen with '${DEDICATED_PLAYER_USER_FOR_AUTOLOGIN}' pre-filled. Please drag it to your TV, maximize, and log in.`);
+        playerWindowRef = newWindow;
+        console.log("IRLMod: window.open call succeeded.");
+        ui.notifications.info(`IRLMod: Player View window opened. Target user: '${dedicatedPlayerUsername}'. Please drag to TV, maximize, and log in.`);
     } else {
-        playerWindowRef = null; // Ensure it's null if we didn't get a reference
-        console.warn("IRLMod: window.open returned null or undefined. A pop-up might have been blocked, or the browser opened the window without returning a reference to the script.");
-        ui.notifications.warn(`IRLMod: A Player View window may have opened, but the script could not get a direct reference to it. This can be normal with some browser pop-up settings. Please check for a new window/tab. It should be at the login screen with '${DEDICATED_PLAYER_USER_FOR_AUTOLOGIN}' pre-filled. Ensure pop-ups are fully allowed for this site.`);
+        playerWindowRef = null;
+        console.warn("IRLMod: window.open returned null or undefined.");
+        ui.notifications.warn(`IRLMod: A Player View window may have opened, but the script could not get a direct reference. Check for a new window/tab. Ensure pop-ups are fully allowed for this site.`);
     }
 }
 
@@ -47,16 +42,49 @@ function sendCommandToPlayerView(commandData) {
 }
 
 Hooks.once('init', () => {
-    console.log("IRLMod | Init hook fired. (v13 - Targeting /join URL)");
+    console.log(`IRLMod | Init hook fired. (v18 - Standard Localization Keys) Attempting to register settings for module: ${MODULE_ID}`);
 
-    // Future: Consider adding a module setting for DEDICATED_PLAYER_USER_FOR_AUTOLOGIN
+    const settingKey = "dedicatedPlayerUsername";
+    // Use the localization keys directly. The settings UI will resolve these.
+    const settingNameLocalizationKey = "irlmod.settingDedicatedPlayerUsernameName";
+    const settingHintLocalizationKey = "irlmod.settingDedicatedPlayerUsernameHint";
+    
+    const settingConfig = {
+        name: settingNameLocalizationKey, // Pass the KEY for the name
+        hint: settingHintLocalizationKey, // Pass the KEY for the hint
+        scope: "world",    
+        config: true,      
+        type: String,
+        default: "ScreenGoblin",
+        onChange: value => {
+            dedicatedPlayerUsername = value; 
+            console.log(`IRLMod: Dedicated player username setting changed to: ${value}`);
+        }
+    };
+
+    console.log("IRLMod | Setting configuration object to be registered (using localization keys):", JSON.parse(JSON.stringify(settingConfig)));
+
+    try {
+        game.settings.register(MODULE_ID, settingKey, settingConfig);
+        console.log(`IRLMod | Successfully called game.settings.register for key: ${settingKey} using localization keys.`);
+    } catch (e) {
+        console.error(`IRLMod | ERROR during game.settings.register for key: ${settingKey}`, e);
+        ui.notifications.error(`IRLMod: Failed to register module settings. Check console (F12).`);
+    }
+
+    try {
+        dedicatedPlayerUsername = game.settings.get(MODULE_ID, settingKey);
+        console.log(`IRLMod | Successfully fetched initial setting for '${settingKey}': ${dedicatedPlayerUsername}`);
+    } catch (e) {
+        console.error(`IRLMod | ERROR fetching initial setting for '${settingKey}'`, e);
+    }
+    console.log(`IRLMod | Init hook complete. Dedicated username: ${dedicatedPlayerUsername}`);
 });
 
 Hooks.on("renderSceneControls", (sceneControlsApp, htmlElement, data) => {
     const jqSceneControlsRoot = $(htmlElement);
-
-    const buttonDataControl = "irlmod-player-screen-v13"; // Unique data-control for this version
-    const title = game.i18n.has("IRLMOD.OpenPlayerViewTitle") ? game.i18n.localize("IRLMOD.OpenPlayerViewTitle") : "Open Player View";
+    const buttonDataControl = "irlmod-player-screen-v18"; 
+    const title = game.i18n.localize("IRLMOD.OpenPlayerViewTitle") || "Open Player View";
 
     const buttonHtml = $(`
         <li class="scene-control irlmod-custom-control" data-control="${buttonDataControl}">
@@ -67,7 +95,6 @@ Hooks.on("renderSceneControls", (sceneControlsApp, htmlElement, data) => {
     `);
 
     const sceneLayersMenu = jqSceneControlsRoot.find('menu#scene-controls-layers').first();
-
     if (sceneLayersMenu.length) {
         if (sceneLayersMenu.find(`li[data-control="${buttonDataControl}"]`).length === 0) {
             sceneLayersMenu.append(buttonHtml);
@@ -78,7 +105,6 @@ Hooks.on("renderSceneControls", (sceneControlsApp, htmlElement, data) => {
     }
 
     const buttonElementForListener = jqSceneControlsRoot.find(`li[data-control="${buttonDataControl}"] button.control.ui-control.layer.icon`);
-
     if (buttonElementForListener.length) {
         buttonElementForListener.off('click.irlmod').on('click.irlmod', (event) => {
             event.preventDefault();
@@ -86,8 +112,8 @@ Hooks.on("renderSceneControls", (sceneControlsApp, htmlElement, data) => {
             launchOrFocusPlayerView();
         });
     } else {
-        console.error(`IRLMod | Failed to find the appended button (li[data-control="${buttonDataControl}"] button) to attach click listener.`);
+        console.error(`IRLMod | Failed to find the appended button to attach click listener.`);
     }
 });
 
-console.log("IRLMod | GM Screen Script Loaded (v13 - Targeting /join URL)");
+console.log("IRLMod | GM Screen Script Loaded (v18 - Standard Localization Keys)");

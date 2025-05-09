@@ -1,5 +1,7 @@
 {
     "IRLMOD.OpenPlayerViewTitle": "Open Player View",
     "IRLMOD.PlayerScreenTitle": "Player Screen (IRLMod)",
-    "IRLMOD.ControlGroupTitle": "Player View Controls"
+    "IRLMOD.ControlGroupTitle": "Player View Controls",
+    "irlmod.settingDedicatedPlayerUsernameName": "Dedicated Player Username (IRLMod)",
+    "irlmod.settingDedicatedPlayerUsernameHint": "Enter the exact username for the IRL Player View. No password recommended for easier login."
 }
