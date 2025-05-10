@@ -1,13 +1,39 @@
-// IRLMod | player-client.js
+// IRLMod | player-client.js v2.28
 // This script runs in all client browsers, but its primary functions
 // are gated to only run if the logged-in user is the dedicated player view user.
 
 const IRLMOD_SOCKET_NAME = "module.irlmod";
 const MODULE_ID = "irlmod"; 
 
-let DEDICATED_PLAYER_USER_NAME = "ScreenGoblin"; 
+let DEDICATED_PLAYER_USER_NAME = "ScreenGoblin"; // Default, will be fetched in init
 let chatMessageObserver = null; 
 let irlPlayerInteractionBlockers = []; 
+
+// --- Register 'renderDocumentSheet' hook at global scope ---
+Hooks.on('renderDocumentSheet', (app, html, data) => {
+    // DEDICATED_PLAYER_USER_NAME should be set by the 'init' hook.
+    // game.user should also be populated by the time a sheet renders.
+    if (game.user && game.user.name === DEDICATED_PLAYER_USER_NAME) {
+        console.log(`IRLMod | Player Client (Global Hook): 'renderDocumentSheet' fired! App: ${app.constructor.name}, ID: ${app.id}, User: ${game.user.name}`);
+        // Check if it's an ActorSheet specifically (or a subclass of it)
+        if (app instanceof ActorSheet) { 
+            console.log(`IRLMod | Player Client (Global Hook): Matched user & ActorSheet. Actor: ${app.actor?.name}`);
+            if (app.actor) { 
+                ui.notifications.warn(`IRLMod: Character sheet for '${app.actor.name}' blocked.`, {permanent: false, console: false});
+                console.log(`IRLMod | Player Client (Global Hook): Closing sheet for actor: ${app.actor.name}`);
+                app.close({force: true}).then(() => {
+                    // console.log(`IRLMod | Player Client (Global Hook): app.close() promise resolved for ${app.actor.name}.`);
+                }).catch(err => {
+                    console.error(`IRLMod | Player Client (Global Hook): Error during app.close() for ${app.actor.name}:`, err);
+                });
+                return false; // Attempt to prevent rendering/further actions
+            }
+        }
+    }
+    return true; 
+});
+console.log("IRLMod | Player Client (Global Scope): 'renderDocumentSheet' hook registered for ActorSheet blocking.");
+
 
 /**
  * Applies hiding styles to a given element.
@@ -43,7 +69,7 @@ function observeChatMessageTextarea() {
         const parentToObserve = targetNode.parentElement || document.body;
         chatMessageObserver.observe(parentToObserve, { attributes: true, childList: true, subtree: true });
     } else {
-        console.warn(`IRLMod | Player Client: Textarea '${chatMessageSelector}' not found to observe.`);
+        // console.warn(`IRLMod | Player Client: Textarea '${chatMessageSelector}' not found to observe.`);
     }
 }
 
@@ -63,7 +89,7 @@ function removeAllBlockedListeners() {
         target.removeEventListener(type, listener, options);
     });
     irlPlayerInteractionBlockers = [];
-    // console.log("IRLMod | Player Client: Removed interaction blocking event listeners."); // Reduce spam
+    // console.log("IRLMod | Player Client: Removed interaction blocking event listeners.");
 }
 
 /**
@@ -76,7 +102,7 @@ function disablePlayerCanvasInteractions() {
         setTimeout(disablePlayerCanvasInteractions, 500);
         return;
     }
-    // console.log("IRLMod | Player Client: Attempting to disable player canvas interactions (v2.21)."); // Reduce spam
+    // console.log("IRLMod | Player Client: Attempting to disable player canvas interactions (v2.28).");
 
     removeAllBlockedListeners(); 
 
@@ -84,14 +110,14 @@ function disablePlayerCanvasInteractions() {
     const doc = document;       
 
     addBlockedListener(view, 'wheel', event => {
-        if (game.user.name === DEDICATED_PLAYER_USER_NAME) {
+        if (game.user?.name === DEDICATED_PLAYER_USER_NAME) { 
             event.stopImmediatePropagation(); 
             event.preventDefault();          
         }
     }, { capture: true, passive: false });
 
     addBlockedListener(view, 'contextmenu', event => {
-        if (game.user.name === DEDICATED_PLAYER_USER_NAME) {
+        if (game.user?.name === DEDICATED_PLAYER_USER_NAME) { 
             event.stopImmediatePropagation();
             event.preventDefault();
         }
@@ -99,8 +125,8 @@ function disablePlayerCanvasInteractions() {
 
     let isPanDrag = false; 
     addBlockedListener(view, 'pointerdown', event => {
-        if (game.user.name === DEDICATED_PLAYER_USER_NAME) {
-            if (event.button === 2 || event.button === 1) {
+        if (game.user?.name === DEDICATED_PLAYER_USER_NAME) { 
+            if (event.button === 2 || event.button === 1) { 
                 isPanDrag = true;
                 event.stopImmediatePropagation();
                 event.preventDefault();
@@ -109,14 +135,14 @@ function disablePlayerCanvasInteractions() {
     }, { capture: true, passive: false });
 
     addBlockedListener(view, 'pointermove', event => {
-        if (game.user.name === DEDICATED_PLAYER_USER_NAME && isPanDrag) {
+        if (game.user?.name === DEDICATED_PLAYER_USER_NAME && isPanDrag) { 
             event.stopImmediatePropagation();
             event.preventDefault();
         }
     }, { capture: true, passive: false });
     
     addBlockedListener(view, 'pointerup', event => {
-        if (game.user.name === DEDICATED_PLAYER_USER_NAME) {
+        if (game.user?.name === DEDICATED_PLAYER_USER_NAME) { 
             if (isPanDrag && (event.button === 2 || event.button === 1)) {
                 isPanDrag = false;
                 event.stopImmediatePropagation();
@@ -126,7 +152,7 @@ function disablePlayerCanvasInteractions() {
     }, { capture: true, passive: false });
     
     addBlockedListener(doc, 'keydown', event => {
-        if (game.user.name === DEDICATED_PLAYER_USER_NAME) {
+        if (game.user?.name === DEDICATED_PLAYER_USER_NAME) { 
             if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) {
                 return; 
             }
@@ -137,8 +163,6 @@ function disablePlayerCanvasInteractions() {
             }
         }
     }, { capture: true, passive: false });
-
-    // ui.notifications.info("IRLMod: Player canvas pan/zoom locked. Token interaction should be possible.");
     console.log("IRLMod | Player Client: Player canvas pan/zoom interactions disabled.");
 }
 
@@ -184,10 +208,9 @@ function forceHideElements(retryCount = 0) {
 }
 
 function setupPlayerViewUI() {
-    // console.log(`IRLMod | Player Client: Attempting to setupPlayerViewUI for user: ${game.user.name} (v2.21)`);
+    console.log(`IRLMod | Player Client: Attempting to setupPlayerViewUI for user: ${game.user.name} (v2.28)`);
     document.body.classList.add('irlmod-player-view-active');
     if (document.body.classList.contains('irlmod-player-view-active')) {
-        // console.log(`IRLMod | Player Client: Successfully ADDED 'irlmod-player-view-active' class to document body.`);
         ui.notifications.info(`IRLMod: Player View UI Initialized for ${DEDICATED_PLAYER_USER_NAME}.`);
         forceHideElements(); 
         disablePlayerCanvasInteractions(); 
@@ -198,29 +221,30 @@ function setupPlayerViewUI() {
 
 /**
  * Processes the setViewFromRectangle command.
- * @param {object} rectData The rectangle data from the GM.
  */
-function processSetViewFromRectangle(rectData) {
-    if (!canvas || !canvas.ready || !canvas.app || !canvas.app.view) { // Check canvas.app.view
+function processSetViewFromRectangle(rectData, retryAttempt = 0) {
+    const MAX_CANVAS_SCREEN_RETRIES = 4; 
+    const CANVAS_SCREEN_RETRY_DELAY = 500;
+
+    if (!canvas || !canvas.ready || !canvas.app || !canvas.app.view) {
         console.warn("IRLMod | Player Client: Canvas, canvas.app, or canvas.app.view not ready for setViewFromRectangle. Aborting.");
-        ui.notifications.error("IRLMod: Player canvas not fully ready. Cannot sync view.");
         return;
     }
-
-    console.log("IRLMod | Player Client: Processing setViewFromRectangle command with rect:", rectData);
     
-    // Use the actual width/height of the canvas HTML element
     const playerScreenWidth = canvas.app.view.width;
     const playerScreenHeight = canvas.app.view.height;
 
     if (!playerScreenWidth || !playerScreenHeight) {
-        console.error("IRLMod | Player Client: canvas.app.view.width or height is not available. Cannot calculate player screen dimensions. Aborting setViewFromRectangle.");
-        ui.notifications.error("IRLMod: Player screen dimensions not available from canvas element. Cannot sync view.");
+        if (retryAttempt < MAX_CANVAS_SCREEN_RETRIES) {
+            setTimeout(() => processSetViewFromRectangle(rectData, retryAttempt + 1), CANVAS_SCREEN_RETRY_DELAY);
+        } else {
+            console.error("IRLMod | Player Client: canvas.app.view.width or height is not available after multiple retries. Aborting setViewFromRectangle.");
+            ui.notifications.error("IRLMod: Player screen dimensions not available. Cannot sync view.");
+        }
         return;
     }
-
+    
     const { x, y, width, height } = rectData;
-
     if (width <= 0 || height <= 0) {
         console.error("IRLMod | Player Client: Received rectangle with zero or negative width/height.", rectData);
         return;
@@ -229,11 +253,9 @@ function processSetViewFromRectangle(rectData) {
     const scaleX = playerScreenWidth / width;
     const scaleY = playerScreenHeight / height;
     const targetScale = Math.min(scaleX, scaleY); 
-
     const centerX = x + width / 2;
     const centerY = y + height / 2;
     
-    console.log(`IRLMod | Player Client: Animating pan to x:${centerX}, y:${centerY}, scale:${targetScale}. Player canvas dimensions: ${playerScreenWidth}x${playerScreenHeight}`);
     canvas.animatePan({ x: centerX, y: centerY, scale: targetScale, duration: 300 });
 }
 
@@ -241,13 +263,11 @@ function processSetViewFromRectangle(rectData) {
 function listenForGMCommands() {
     if (!game.socket) return;
     game.socket.on(IRLMOD_SOCKET_NAME, (data) => {
-        if (game.user.name !== DEDICATED_PLAYER_USER_NAME) return;
+        if (game.user?.name !== DEDICATED_PLAYER_USER_NAME) return; 
         
-        console.log(`IRLMod | Player Client: Received command from GM:`, data); 
         if (data.action === "setViewFromRectangle" && data.rect) {
             processSetViewFromRectangle(data.rect); 
         } else if (data.action === "setView" && data.view && canvas && canvas.ready) { 
-            console.log(`IRLMod | Player Client: Animating pan (legacy) to x:${data.view.x}, y:${data.view.y}, scale:${data.view.scale}`);
             canvas.animatePan({ x: data.view.x, y: data.view.y, scale: data.view.scale, duration: 300 });
         }
     });
@@ -255,33 +275,45 @@ function listenForGMCommands() {
 }
 
 Hooks.once('init', () => {
-    console.log(`IRLMod | Player Client: Init hook fired. (v2.21)`);
+    console.log(`IRLMod | Player Client: Init hook fired. (v2.28 - Using renderDocumentSheet)`);
+    try {
+        DEDICATED_PLAYER_USER_NAME = game.settings.get(MODULE_ID, "dedicatedPlayerUsername") || "ScreenGoblin";
+        console.log(`IRLMod | Player Client (init): Using DEDICATED_PLAYER_USER_NAME: '${DEDICATED_PLAYER_USER_NAME}' from settings.`);
+    } catch (e) {
+        console.warn(`IRLMod | Player Client (init): Error fetching 'dedicatedPlayerUsername' setting during init. Using default.`, e);
+        DEDICATED_PLAYER_USER_NAME = "ScreenGoblin"; 
+    }
+    // The 'renderDocumentSheet' hook is registered at the global scope (top of the file)
 });
 
 Hooks.once('ready', () => {
     try {
-        DEDICATED_PLAYER_USER_NAME = game.settings.get(MODULE_ID, "dedicatedPlayerUsername") || "ScreenGoblin";
+        const settingUsername = game.settings.get(MODULE_ID, "dedicatedPlayerUsername");
+        if (settingUsername) DEDICATED_PLAYER_USER_NAME = settingUsername;
+        else if (!DEDICATED_PLAYER_USER_NAME) DEDICATED_PLAYER_USER_NAME = "ScreenGoblin";
     } catch (e) {
-        console.error(`IRLMod | Player Client: Error fetching 'dedicatedPlayerUsername' setting. Using default.`, e);
-        DEDICATED_PLAYER_USER_NAME = "ScreenGoblin";
+        console.error(`IRLMod | Player Client (ready): Error fetching 'dedicatedPlayerUsername' setting. Using established or default.`, e);
+        if (!DEDICATED_PLAYER_USER_NAME) DEDICATED_PLAYER_USER_NAME = "ScreenGoblin";
     }
 
-    console.log(`IRLMod | Player Client: 'ready' hook fired. Current user: '${game.user?.name}' (v2.21)`);
-    console.log(`IRLMod | Player Client: Using DEDICATED_PLAYER_USER_NAME: '${DEDICATED_PLAYER_USER_NAME}' from settings.`);
+    console.log(`IRLMod | Player Client: 'ready' hook fired. Current user: '${game.user?.name}' (v2.28)`);
+    console.log(`IRLMod | Player Client (ready): Confirmed DEDICATED_PLAYER_USER_NAME: '${DEDICATED_PLAYER_USER_NAME}'.`);
     
     const initialDelayBeforeSetup = 2000; 
 
     if (game.user && game.user.name === DEDICATED_PLAYER_USER_NAME) {
         console.log(`IRLMod | Player Client: User MATCH! '${game.user.name}' is the dedicated player user.`);
-        ui.notifications.info(`IRLMod: Welcome, ${DEDICATED_PLAYER_USER_NAME}! Initializing Player View (with ${initialDelayBeforeSetup/1000}s delay).`);
+        ui.notifications.info(`IRLMod: Welcome, ${DEDICATED_PLAYER_USER_NAME}! Initializing Player View.`);
+        
         setTimeout(() => {
-            console.log("IRLMod | Player Client: Executing setupPlayerViewUI and listenForGMCommands after extended delay.");
-            setupPlayerViewUI();
-            listenForGMCommands();
+            console.log("IRLMod | Player Client: Executing setupPlayerViewUI and listenForGMCommands after initial delay.");
+            setupPlayerViewUI(); 
+            listenForGMCommands(); 
         }, initialDelayBeforeSetup); 
+
     } else {
         console.log(`IRLMod | Player Client: User MISMATCH. Current user '${game.user?.name}' is NOT the dedicated player user '${DEDICATED_PLAYER_USER_NAME}'. IRLMod Player Client will remain dormant.`);
     }
 });
 
-console.log("IRLMod | Player Client Script Loaded (v2.21 - Use canvas.app.view for dimensions)");
+console.log("IRLMod | Player Client Script Loaded (v2.28 - Using renderDocumentSheet Hook)");
