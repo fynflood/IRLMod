@@ -2,9 +2,9 @@
   "id": "irlmod",
   "title": "IRLMod",
   "description": "A module to display and manage a dedicated player view on a secondary touchscreen display for in-person games.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "compatibility": {
-    "minimum": "11", 
+    "minimum": "12", 
     "verified": "13"
   },
   "authors": [
@@ -30,8 +30,19 @@
     }
   ],
   "socket": true,
-  "manifest": "",
-  "download": "",
+  "settings": [
+    {
+      "name": "Dedicated Player Username",
+      "hint": "Enter the exact username of the player account that will be used for the IRL Player View. This user should ideally have no password for easier (though still manual) login via the /join URL.",
+      "key": "dedicatedPlayerUsername",
+      "type": "String",
+      "default": "ScreenGoblin",
+      "scope": "world",
+      "config": true
+    }
+  ],
+  "manifest": "https://github.com/fynflood/IRLMod/releases/download/v0.3.0/module.json",
+  "download": "https://github.com/fynflood/IRLMod/releases/download/v0.3.0/irlmod.zip",
   "protected": false,
   "license": "LICENSE.txt"
 }
