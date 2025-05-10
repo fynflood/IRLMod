@@ -1,4 +1,4 @@
-/* IRLMod | css/irlmod-styles.css (v3.9 - Corrected Selectors) */
+/* IRLMod | css/irlmod-styles.css (v3.11 - Force Ruler Visibility) */
 
 html body.irlmod-player-view-active {
     overflow: hidden !important;
@@ -17,18 +17,59 @@ html body.irlmod-player-view-active #sidebar-tabs > nav.tabs,
 html body.irlmod-player-view-active #sidebar-tabs, 
 html body.irlmod-player-view-active #hotbar,
 html body.irlmod-player-view-active #players,
-html body.irlmod-player-view-active #scene-controls, /* Corrected ID */
+html body.irlmod-player-view-active #scene-controls,
 html body.irlmod-player-view-active #logo,
 html body.irlmod-player-view-active #chat-log,
-html body.irlmod-player-view-active form.chat-form, /* Hides the form element */
-html body.irlmod-player-view-active textarea#chat-message, /* Hides the actual text input area */
+html body.irlmod-player-view-active form.chat-form,
+html body.irlmod-player-view-active textarea#chat-message,
 html body.irlmod-player-view-active .notification-tray,
 html body.irlmod-player-view-active #notifications,
-html body.irlmod-player-view-active #pause,
-html body.irlmod-player-view-active div.app.window-app { 
+html body.irlmod-player-view-active #pause
+/* Note: div.app.window-app is still commented out from previous test */
+/* html body.irlmod-player-view-active div.app.window-app */ 
+{ 
     display: none !important;
     visibility: hidden !important;
 }
+
+/* --- Ensure HUD and Ruler are Visible --- */
+
+/* Ensure the main HUD container is displayed, just in case */
+html body.irlmod-player-view-active #hud {
+    display: block !important; /* Or flex, depending on its default, block is usually safe */
+    visibility: visible !important;
+    z-index: 100 !important; /* Ensure it's above the board */
+}
+
+/* Target the ruler container specifically */
+html body.irlmod-player-view-active div.ruler {
+    display: block !important; /* Or its default display type if known, e.g., flex */
+    visibility: visible !important;
+    position: fixed !important; /* Ensure it's positioned relative to viewport if it gets lost */
+    background-color: rgba(0, 0, 0, 0.7) !important; /* Dark semi-transparent background */
+    color: white !important;
+    padding: 5px !important;
+    border-radius: 3px !important;
+    border: 1px solid yellow !important; /* Make it very obvious */
+    font-size: 14px !important;
+    z-index: 10000 !important; /* Very high z-index to ensure it's on top */
+    pointer-events: none !important; /* So it doesn't interfere with mouse */
+    opacity: 1 !important;
+}
+
+/* Target the text spans within the ruler */
+html body.irlmod-player-view-active div.ruler span {
+    display: inline-block !important; /* Or inline, depending on how they are used */
+    visibility: visible !important;
+    color: white !important; /* Ensure text is white */
+    opacity: 1 !important;
+    padding: 0 3px !important;
+}
+
+html body.irlmod-player-view-active div.ruler span.ruler-total {
+    font-weight: bold !important;
+}
+
 
 /* --- Adjusting the Game Canvas --- */
 html body.irlmod-player-view-active #board {
