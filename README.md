@@ -1,6 +1,9 @@
 # IRLMod
 ![image](https://github.com/user-attachments/assets/f51955ab-130a-43be-8ebb-a8a01c8cf6f8)
 
+## Why?
+I've been DM'ing for a long time now using a TV on our table for the players to interact with. The software I've been using for this was designed with that specifically in mind, but the longer I use it the less I like it. It's not nice to look at, it consumes an incredible amount of system resources and it's as buggy as Star Citizen. It also lacks a lot of GM specific features that FoundryVTT provides, and does them quite well. This is my attempt a ditching the software I've been using.  *Disclaimer: It's worth noting, I haven't yet tested this in an actual play session*
+
 ## Dedicated Player View Window Launch:
 The GM has a button in their scene controls (a TV icon) to open a new browser window. This window is intended to be moved to a secondary, player-facing display (like your TV).
 - Provides a separate view of the game for players.
