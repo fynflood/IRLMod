@@ -5,5 +5,11 @@
     "irlmod.settingDedicatedPlayerUsernameName": "Dedicated Player Username (IRLMod)",
     "irlmod.settingDedicatedPlayerUsernameHint": "Enter the exact username for the IRL Player View. No password recommended for easier login.",
     "IRLMOD.SyncPlayerViewTitle": "Sync My View to Player Screen",
-    "IRLMOD.ToggleOverlayTitle": "Toggle Player Viewport Overlay"
+    "IRLMOD.ToggleOverlayTitle": "Toggle Player Viewport Overlay",
+    "IRLMOD.settings.tvPhysicalWidth.name": "Player TV - Physical Width (inches)",
+    "IRLMOD.settings.tvPhysicalWidth.hint": "The physical width of your player-facing TV screen in inches.",
+    "IRLMOD.settings.tvResolutionWidth.name": "Player TV - Resolution Width (pixels)",
+    "IRLMOD.settings.tvResolutionWidth.hint": "The horizontal resolution of your player-facing TV screen in pixels (e.g., 1920 or 3840).",
+    "IRLMOD.settings.tvDesiredGridInches.name": "Player TV - Desired Grid Size (inches)",
+    "IRLMOD.settings.tvDesiredGridInches.hint": "The desired physical size for each grid square on the player TV (e.g., 1.0 for 1-inch squares)."
 }

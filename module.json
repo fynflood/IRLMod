@@ -2,7 +2,7 @@
   "id": "irlmod",
   "title": "IRLMod",
   "description": "A module to display and manage a dedicated player view on a secondary touchscreen display for in-person games.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "compatibility": {
     "minimum": "12", 
     "verified": "13"
@@ -37,6 +37,33 @@
       "key": "dedicatedPlayerUsername",
       "type": "String",
       "default": "ScreenGoblin",
+      "scope": "world",
+      "config": true
+    },
+    {
+      "name": "IRLMOD.settings.tvPhysicalWidth.name",
+      "hint": "IRLMOD.settings.tvPhysicalWidth.hint",
+      "key": "tvPhysicalWidthInches",
+      "type": "Number",
+      "default": 40,
+      "scope": "world",
+      "config": true
+    },
+    {
+      "name": "IRLMOD.settings.tvResolutionWidth.name",
+      "hint": "IRLMOD.settings.tvResolutionWidth.hint",
+      "key": "tvResolutionWidthPixels",
+      "type": "Number",
+      "default": 1920,
+      "scope": "world",
+      "config": true
+    },
+    {
+      "name": "IRLMOD.settings.tvDesiredGridInches.name",
+      "hint": "IRLMOD.settings.tvDesiredGridInches.hint",
+      "key": "tvDesiredGridInches",
+      "type": "Number",
+      "default": 1.0,
       "scope": "world",
       "config": true
     }
