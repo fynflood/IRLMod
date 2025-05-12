@@ -1,7 +1,7 @@
 # IRLMod
 
 ![image](https://github.com/user-attachments/assets/86121f1a-446f-4f9c-a030-6a57e69962fb)
-https://www.youtube.com/watch?v=EfvoVM1tczU
+[https://www.youtube.com/watch?v=EfvoVM1tczU](https://youtu.be/sWJuJLrVDGw)
 
 ## Why?
 I've been DM'ing for a long time now using a TV on our table for the players to interact with. The software I've been using for this was designed with that specifically in mind, but the longer I use it the less I like it. It's not nice to look at, it consumes an incredible amount of system resources and it's as buggy as Star Citizen. It also lacks a lot of GM specific features that FoundryVTT provides, and does them quite well.  *Disclaimer: It's worth noting, I haven't yet tested this in an actual play session*
