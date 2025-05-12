@@ -237,7 +237,7 @@ function toggleGMOverlay() {
 
         gmOverlayHeader = document.createElement('div');
         gmOverlayHeader.id = 'irlmod-gm-overlay-header';
-        gmOverlayHeader.textContent = 'Player Viewport'; 
+        gmOverlayHeader.textContent = 'Table View'; 
         gmOverlayDiv.appendChild(gmOverlayHeader);
 
         const closeButton = document.createElement('button');
@@ -435,7 +435,7 @@ Hooks.on("renderSceneControls", (sceneControlsApp, htmlElement, data) => {
     const toggleSplashButtonDataControl = "irlmod-toggle-splash-v38"; // New button
 
     const openTitle = game.i18n.localize("IRLMOD.OpenPlayerViewTitle") || "Open Player View";
-    const toggleOverlayTitle = game.i18n.localize("IRLMOD.ToggleOverlayTitle") || "Toggle Viewport Overlay";
+    const toggleOverlayTitle = game.i18n.localize("IRLMOD.ToggleOverlayTitle") || "Toggle Table View Overlay";
     const toggleSplashTitle = game.i18n.localize("IRLMOD.ToggleSplashImageTitle") || "Toggle Splash Image"; 
 
     const openButtonHtml = $(`<li class="scene-control irlmod-custom-control" data-control="${openButtonDataControl}"><button type="button" class="control ui-control layer icon" title="${openTitle}" aria-label="${openTitle}"><i class="fas fa-tv"></i></button></li>`);
