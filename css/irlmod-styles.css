@@ -1,4 +1,4 @@
-/* IRLMod | css/irlmod-styles.css (v3.14 - More Aggressive GM Cursor Hide) */
+/* IRLMod | css/irlmod-styles.css (v3.15 - Splash Screen Style) */
 
 html body.irlmod-player-view-active {
     overflow: hidden !important;
@@ -19,27 +19,18 @@ html body.irlmod-player-view-active #hotbar,
 html body.irlmod-player-view-active #players,
 html body.irlmod-player-view-active #scene-controls,
 html body.irlmod-player-view-active #logo,
-html body.irlmod-player-view-active #chat-notifications, /* Hides the main container for chat log and input */
+html body.irlmod-player-view-active #chat-notifications,
 html body.irlmod-player-view-active #chat-log, 
 html body.irlmod-player-view-active ol.chat-log, 
 html body.irlmod-player-view-active form.chat-form,
 html body.irlmod-player-view-active textarea#chat-message,
 html body.irlmod-player-view-active .notification-tray,
 html body.irlmod-player-view-active #notifications,
-html body.irlmod-player-view-active #pause
-/* html body.irlmod-player-view-active div.app.window-app */ 
-{ 
+html body.irlmod-player-view-active #pause,
+html body.irlmod-player-view-active #cursor-tooltip, /* Hide GM cursor */
+html body.irlmod-player-view-active div.app.window-app { 
     display: none !important;
     visibility: hidden !important;
-}
-
-/* --- Hide GM Cursor on Player Screen --- */
-html body.irlmod-player-view-active #cursor-tooltip {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important; /* Add this */
-    z-index: -1 !important; /* Add this to try and push it behind everything */
-    pointer-events: none !important; /* Ensure it doesn't capture any events */
 }
 
 /* --- Ensure HUD and Ruler are Visible --- */
@@ -48,33 +39,37 @@ html body.irlmod-player-view-active #hud {
     visibility: visible !important;
     z-index: 100 !important; 
 }
-
 html body.irlmod-player-view-active div.ruler {
-    display: block !important; 
-    visibility: visible !important;
-    position: fixed !important; 
-    background-color: rgba(0, 0, 0, 0.7) !important; 
-    color: white !important;
-    padding: 3px 5px !important; 
-    border-radius: 3px !important;
-    font-size: 13px !important; 
-    z-index: 10000 !important; 
-    pointer-events: none !important; 
-    opacity: 1 !important;
+    display: block !important; visibility: visible !important; position: fixed !important; 
+    background-color: rgba(0, 0, 0, 0.7) !important; color: white !important;
+    padding: 3px 5px !important; border-radius: 3px !important;
+    font-size: 13px !important; z-index: 10000 !important; 
+    pointer-events: none !important; opacity: 1 !important;
     text-shadow: 1px 1px 1px #000 !important; 
 }
-
 html body.irlmod-player-view-active div.ruler span {
-    display: inline-block !important; 
-    visibility: visible !important;
-    color: white !important; 
-    opacity: 1 !important;
-    padding: 0 2px !important; 
+    display: inline-block !important; visibility: visible !important;
+    color: white !important; opacity: 1 !important; padding: 0 2px !important; 
 }
-
 html body.irlmod-player-view-active div.ruler span.ruler-total {
     font-weight: bold !important;
 }
+
+/* --- Player Splash Screen --- */
+#irlmod-player-splash-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 200000; /* Ensure it's above everything, including HUD */
+    background-color: black; /* Fallback if image doesn't load */
+    background-size: contain; /* Or 'cover' if you prefer stretching */
+    background-position: center center;
+    background-repeat: no-repeat;
+    display: none; /* Initially hidden */
+}
+
 
 /* --- Adjusting the Game Canvas --- */
 html body.irlmod-player-view-active #board {
@@ -84,7 +79,7 @@ html body.irlmod-player-view-active #board {
     left: 0 !important;
     position: fixed !important;
     background-color: black !important;
-    z-index: 1 !important;
+    z-index: 1 !important; /* Lower than splash and HUD */
     margin: 0 !important;
     padding: 0 !important;
 }

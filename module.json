@@ -32,8 +32,8 @@
   "socket": true,
   "settings": [
     {
-      "name": "Dedicated Player Username",
-      "hint": "Enter the exact username of the player account that will be used for the IRL Player View. This user should ideally have no password for easier (though still manual) login via the /join URL.",
+      "name": "irlmod.settingDedicatedPlayerUsernameName",
+      "hint": "irlmod.settingDedicatedPlayerUsernameHint",
       "key": "dedicatedPlayerUsername",
       "type": "String",
       "default": "ScreenGoblin",
@@ -41,31 +41,14 @@
       "config": true
     },
     {
-      "name": "IRLMOD.settings.tvPhysicalWidth.name",
-      "hint": "IRLMOD.settings.tvPhysicalWidth.hint",
-      "key": "tvPhysicalWidthInches",
-      "type": "Number",
-      "default": 40,
+      "name": "irlmod.settingSplashImageURL.name",
+      "hint": "irlmod.settingSplashImageURL.hint",
+      "key": "splashImageURL",
+      "type": "String",
+      "default": "",
       "scope": "world",
-      "config": true
-    },
-    {
-      "name": "IRLMOD.settings.tvResolutionWidth.name",
-      "hint": "IRLMOD.settings.tvResolutionWidth.hint",
-      "key": "tvResolutionWidthPixels",
-      "type": "Number",
-      "default": 1920,
-      "scope": "world",
-      "config": true
-    },
-    {
-      "name": "IRLMOD.settings.tvDesiredGridInches.name",
-      "hint": "IRLMOD.settings.tvDesiredGridInches.hint",
-      "key": "tvDesiredGridInches",
-      "type": "Number",
-      "default": 1.0,
-      "scope": "world",
-      "config": true
+      "config": true,
+      "filePicker": "imagevideo"
     }
   ],
   "manifest": "https://github.com/fynflood/IRLMod/releases/download/v0.3.0/module.json",
