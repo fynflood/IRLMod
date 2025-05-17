@@ -21,5 +21,11 @@
     "irlmod.settingPiServerIP.name": "Raspberry Pi Server IP",
     "irlmod.settingPiServerIP.hint": "The local IP address of the Raspberry Pi running the touch input server.",
     "irlmod.settingPiServerPort.name": "Raspberry Pi Server Port",
-    "irlmod.settingPiServerPort.hint": "The port number the touch input server on the Raspberry Pi is listening on."
+    "irlmod.settingPiServerPort.hint": "The port number the touch input server on the Raspberry Pi is listening on.",
+    "irlmod.settingPlayerPerformanceMode.name": "Player View Performance Mode",
+    "irlmod.settingPlayerPerformanceMode.hint": "Sets the rendering performance mode for the dedicated IRL Player View window. 'Auto' uses Foundry's default.",
+    "IRLMOD.performanceModes.low": "Low",
+    "IRLMOD.performanceModes.medium": "Medium",
+    "IRLMOD.performanceModes.high": "High",
+    "IRLMOD.performanceModes.auto": "Automatic"
 }

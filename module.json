@@ -2,10 +2,10 @@
   "id": "irlmod",
   "title": "IRLMod",
   "description": "A module to display and manage a dedicated player view on a secondary touchscreen display for in-person games, with support for external input processing.",
-  "version": "0.6.0",
+  "version": "0.7.0", 
   "compatibility": {
-    "minimum": "13", 
-    "verified": "13"
+    "minimum": "12", 
+    "verified": "13" 
   },
   "authors": [
     {
@@ -55,7 +55,7 @@
       "hint": "IRLMOD.settings.tvPhysicalWidth.hint",
       "key": "tvPhysicalWidthInches",
       "type": "Number",
-      "default": 43,
+      "default": 40, 
       "scope": "world",
       "config": true
     },
@@ -64,7 +64,7 @@
       "hint": "IRLMOD.settings.tvResolutionWidth.hint",
       "key": "tvResolutionWidthPixels",
       "type": "Number",
-      "default": 3046,
+      "default": 1920, 
       "scope": "world",
       "config": true
     },
@@ -99,10 +99,25 @@
       "default": 8765,
       "scope": "world",
       "config": true
+    },
+    {
+      "name": "irlmod.settingPlayerPerformanceMode.name",
+      "hint": "irlmod.settingPlayerPerformanceMode.hint",
+      "key": "playerPerformanceMode",
+      "type": "String",
+      "default": "high",
+      "scope": "world",
+      "config": true,
+      "choices": {
+        "low": "IRLMOD.performanceModes.low",
+        "medium": "IRLMOD.performanceModes.medium",
+        "high": "IRLMOD.performanceModes.high",
+        "auto": "IRLMOD.performanceModes.auto"
+      }
     }
   ],
-  "manifest": "https://github.com/fynflood/IRLMod/releases/download/v0.3.0/module.json",
-  "download": "https://github.com/fynflood/IRLMod/releases/download/v0.3.0/irlmod.zip",
+  "manifest": "https://github.com/fynflood/IRLMod/releases/download/v0.7.0/module.json", 
+  "download": "https://github.com/fynflood/IRLMod/releases/download/v0.7.0/irlmod.zip", 
   "protected": false,
   "license": "LICENSE.txt"
 }
