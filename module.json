@@ -1,10 +1,10 @@
 {
   "id": "irlmod",
   "title": "IRLMod",
-  "description": "A module to display and manage a dedicated player view on a secondary touchscreen display for in-person games.",
-  "version": "0.4.0",
+  "description": "A module to display and manage a dedicated player view on a secondary touchscreen display for in-person games, with support for external input processing.",
+  "version": "0.6.0",
   "compatibility": {
-    "minimum": "12", 
+    "minimum": "13", 
     "verified": "13"
   },
   "authors": [
@@ -49,6 +49,56 @@
       "scope": "world",
       "config": true,
       "filePicker": "imagevideo"
+    },
+    {
+      "name": "IRLMOD.settings.tvPhysicalWidth.name",
+      "hint": "IRLMOD.settings.tvPhysicalWidth.hint",
+      "key": "tvPhysicalWidthInches",
+      "type": "Number",
+      "default": 43,
+      "scope": "world",
+      "config": true
+    },
+    {
+      "name": "IRLMOD.settings.tvResolutionWidth.name",
+      "hint": "IRLMOD.settings.tvResolutionWidth.hint",
+      "key": "tvResolutionWidthPixels",
+      "type": "Number",
+      "default": 3046,
+      "scope": "world",
+      "config": true
+    },
+    {
+      "name": "IRLMOD.settings.tvDesiredGridInches.name",
+      "hint": "IRLMOD.settings.tvDesiredGridInches.hint",
+      "key": "tvDesiredGridInches",
+      "type": "Number",
+      "default": 1.0,
+      "scope": "world",
+      "config": true,
+      "range": { 
+        "min": 0.1,
+        "max": 10,
+        "step": 0.1
+      }
+    },
+    {
+      "name": "irlmod.settingPiServerIP.name",
+      "hint": "irlmod.settingPiServerIP.hint",
+      "key": "piServerIP",
+      "type": "String",
+      "default": "192.168.1.100",
+      "scope": "world",
+      "config": true
+    },
+    {
+      "name": "irlmod.settingPiServerPort.name",
+      "hint": "irlmod.settingPiServerPort.hint",
+      "key": "piServerPort",
+      "type": "Number",
+      "default": 8765,
+      "scope": "world",
+      "config": true
     }
   ],
   "manifest": "https://github.com/fynflood/IRLMod/releases/download/v0.3.0/module.json",

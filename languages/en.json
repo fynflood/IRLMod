@@ -16,5 +16,10 @@
     "IRLMOD.settings.tvDesiredGridInches.hint": "The desired physical size for each grid square on the player TV (e.g., 1.0 for 1-inch squares).",
     "IRLMOD.OverlaySyncButton": "Sync to Table",
     "IRLMOD.OverlayCalibrateButton": "Calibrate TV",
-    "IRLMOD.OverlayCloseButtonHint": "Close Overlay"
+    "IRLMOD.OverlayCloseButtonHint": "Close Overlay",
+    "IRLMOD.OverlayHeaderTitle": "Table View",
+    "irlmod.settingPiServerIP.name": "Raspberry Pi Server IP",
+    "irlmod.settingPiServerIP.hint": "The local IP address of the Raspberry Pi running the touch input server.",
+    "irlmod.settingPiServerPort.name": "Raspberry Pi Server Port",
+    "irlmod.settingPiServerPort.hint": "The port number the touch input server on the Raspberry Pi is listening on."
 }
