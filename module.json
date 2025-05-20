@@ -1,10 +1,10 @@
 {
   "id": "irlmod",
   "title": "IRLMod",
-  "description": "A module to display and manage a dedicated player view on a secondary touchscreen display for in-person games, with support for external input processing.",
-  "version": "0.7.0", 
+  "description": "A module to display and manage a dedicated player view on a TV with an IR Touch Frame for in-person games",
+  "version": "0.9.0", 
   "compatibility": {
-    "minimum": "12", 
+    "minimum": "13", 
     "verified": "13" 
   },
   "authors": [
@@ -116,8 +116,8 @@
       }
     }
   ],
-  "manifest": "https://github.com/fynflood/IRLMod/releases/download/v0.7.0/module.json", 
-  "download": "https://github.com/fynflood/IRLMod/releases/download/v0.7.0/irlmod.zip", 
+  "manifest": "https://github.com/fynflood/IRLMod/releases/download/v0.9.0/module.json", 
+  "download": "https://github.com/fynflood/IRLMod/releases/download/v0.9.0/irlmod.zip", 
   "protected": false,
   "license": "LICENSE.txt"
 }
