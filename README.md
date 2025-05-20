@@ -1,6 +1,5 @@
 # IRLMod
-
-![image](https://github.com/user-attachments/assets/86121f1a-446f-4f9c-a030-6a57e69962fb)
+![image](https://github.com/user-attachments/assets/e856b1a1-2cbd-4147-ab3e-740bd56bbfd9)
 [https://www.youtube.com/watch?v=EfvoVM1tczU](https://youtu.be/sWJuJLrVDGw)
 
 # GM-Side Features:
