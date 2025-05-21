@@ -27,5 +27,6 @@
     "IRLMOD.performanceModes.low": "Low",
     "IRLMOD.performanceModes.medium": "Medium",
     "IRLMOD.performanceModes.high": "High",
+    "IRLMOD.performanceModes.maximum": "Maximum",
     "IRLMOD.performanceModes.auto": "Automatic"
 }
