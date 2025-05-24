@@ -5,6 +5,7 @@
   "version": "0.9.1", 
   "compatibility": {
     "minimum": "13", 
+    "minimum": "13", 
     "verified": "13" 
   },
   "authors": [
@@ -112,6 +113,7 @@
         "low": "IRLMOD.performanceModes.low",
         "medium": "IRLMOD.performanceModes.medium",
         "high": "IRLMOD.performanceModes.high",
+        "maximum": "IRLMOD.performanceModes.maximum",
         "maximum": "IRLMOD.performanceModes.maximum",
         "auto": "IRLMOD.performanceModes.auto"
       }
