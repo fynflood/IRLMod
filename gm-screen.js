@@ -1,12 +1,11 @@
-// IRLMod | gm-screen.js (v36.6 - Overlay Toggle & Splash Sync Refinement)
+// IRLMod | gm-screen.js (v36.7 - Auto-Create User)
 
-// ... (Constants and most variables same as v36.5) ...
 const PLAYER_WINDOW_NAME = "FoundryIRLPlayerView";
 const IRLMOD_SOCKET_NAME = "module.irlmod";
 const MODULE_ID = "irlmod"; 
 
 let playerWindowRef = null;
-let dedicatedPlayerUsername = "ScreenGoblin"; 
+let dedicatedPlayerUsername = "ScreenGoblin"; // Default, will be updated from settings
 let autoCalibratedThisSession = false;
 
 let gmOverlayDiv = null; 
@@ -24,12 +23,14 @@ let tvDesiredGridInches;
 let piServerIP;
 let piServerPort;   
 
-// ... (sendCommandToPlayerView, injectGMOverlayCSS, renderGMOverlayFromCanvasState, calibrateOverlayForTVGrid - same as v36.5)
-function sendCommandToPlayerView(commandData) { /* Same */
+// --- FUNCTION DEFINITIONS ---
+
+function sendCommandToPlayerView(commandData) { /* Same as v36.6 */
     if (!game.socket || !game.socket.active) { ui.notifications.error("IRLMod: Socket is not active."); return; }
     game.socket.emit(IRLMOD_SOCKET_NAME, commandData);
 }
-function injectGMOverlayCSS() { /* Same as v36.5 */
+
+function injectGMOverlayCSS() { /* Same as v36.6 */
     if (document.getElementById('irlmod-gm-overlay-styles')) return;
     const headerBarHeight = "26px", closeButtonSize = "26px", overlayBorderWidth = "2px";
     const css = `
@@ -49,7 +50,8 @@ function injectGMOverlayCSS() { /* Same as v36.5 */
         li.scene-control[data-control="irlmod-toggle-splash"] button.active { color: #ff4040; box-shadow: 0 0 8px #ff4040; }`;
     const styleElement = document.createElement('style'); styleElement.id = 'irlmod-gm-overlay-styles'; styleElement.innerHTML = css; document.head.appendChild(styleElement);
 }
-function renderGMOverlayFromCanvasState() { /* Same as v36.5 */
+
+function renderGMOverlayFromCanvasState() { /* Same as v36.6 */
     if (!gmOverlayDiv || !canvas || !canvas.ready || !canvas.stage || !canvas.stage.worldTransform) return;
     if (!gmOverlayCanvasState.visible) { gmOverlayDiv.style.display = 'none'; return; }
     gmOverlayDiv.style.display = 'block'; const wt = canvas.stage.worldTransform;
@@ -63,7 +65,8 @@ function renderGMOverlayFromCanvasState() { /* Same as v36.5 */
         }
     }
 }
-function calibrateOverlayForTVGrid() { /* Same as v36.5 */
+
+function calibrateOverlayForTVGrid() { /* Same as v36.6 */
     if (!canvas || !canvas.ready || !canvas.dimensions || !canvas.scene?.grid?.size) { ui.notifications.error("IRLMod: Canvas or scene grid not ready for calibration."); return; }
     tvPhysicalWidthInches = game.settings.get(MODULE_ID, "tvPhysicalWidthInches"); tvResolutionWidthPixels = game.settings.get(MODULE_ID, "tvResolutionWidthPixels"); tvDesiredGridInches = game.settings.get(MODULE_ID, "tvDesiredGridInches");
     if (!tvPhysicalWidthInches || !tvResolutionWidthPixels || !tvDesiredGridInches || tvPhysicalWidthInches <= 0 || tvResolutionWidthPixels <= 0 || tvDesiredGridInches <= 0) { ui.notifications.error("IRLMod: TV settings missing or invalid."); return; }
@@ -77,14 +80,12 @@ function calibrateOverlayForTVGrid() { /* Same as v36.5 */
     ui.notifications.info(`IRLMod: Overlay calibrated for ~${tvDesiredGridInches}" grid.`);
 }
 
-
-function toggleGMOverlay() { 
+function toggleGMOverlay() { /* Same as v36.6 */
     injectGMOverlayCSS(); 
     let wasJustCreated = false;
     if (!gmOverlayDiv) {
         wasJustCreated = true;
         gmOverlayDiv = document.createElement('div'); gmOverlayDiv.id = 'irlmod-gm-overlay';
-        // ... (rest of DOM creation same as v36.5) ...
         gmOverlayHeader = document.createElement('div'); gmOverlayHeader.id = 'irlmod-gm-overlay-header';
         gmOverlayHeaderTitle = document.createElement('span'); gmOverlayHeaderTitle.id = 'irlmod-gm-overlay-header-title';
         gmOverlayHeaderTitle.textContent = game.i18n.localize("IRLMOD.OverlayHeaderTitle"); 
@@ -113,21 +114,19 @@ function toggleGMOverlay() {
         if (game.settings.get(MODULE_ID, "tvPhysicalWidthInches") > 0 && 
             game.settings.get(MODULE_ID, "tvResolutionWidthPixels") > 0 &&
             game.settings.get(MODULE_ID, "tvDesiredGridInches") > 0) {
-            calibrateOverlayForTVGrid(); // This sets gmOverlayCanvasState.visible = true
-            autoCalibratedThisSession = true;
+            calibrateOverlayForTVGrid(); autoCalibratedThisSession = true;
         } else { 
             const viewRect = canvas.dimensions.rect; 
             gmOverlayCanvasState.width = viewRect.width * 0.6; 
             gmOverlayCanvasState.height = gmOverlayCanvasState.width / (16/9);
             gmOverlayCanvasState.x = viewRect.x + (viewRect.width - gmOverlayCanvasState.width) / 2;
             gmOverlayCanvasState.y = viewRect.y + (viewRect.height - gmOverlayCanvasState.height) / 2;
-            gmOverlayCanvasState.visible = true; // Make it visible if not calibrating
+            gmOverlayCanvasState.visible = true; 
         }
-    } else { // Not first time, or already auto-calibrated: just toggle visibility
+    } else { 
         gmOverlayCanvasState.visible = !gmOverlayCanvasState.visible;
     }
     
-    // Ensure valid dimensions if it was just made visible and seems uninitialized
     if (gmOverlayCanvasState.visible && (!gmOverlayCanvasState.width || gmOverlayCanvasState.width < 10)) {
         if (canvas?.ready && canvas.dimensions) {
             const viewRect = canvas.dimensions.rect; 
@@ -140,44 +139,20 @@ function toggleGMOverlay() {
     renderGMOverlayFromCanvasState(); 
 }
 
-// ... (makeDraggable, makeResizable, sendOverlayViewToPlayerScreen, togglePlayerSplashImage, ensureDedicatedUserExists, launchOrFocusPlayerView, Hooks - same as v36.5) ...
-function makeDraggable(element, handle) { /* Same as v36.5 */
+function makeDraggable(element, handle) { /* Same as v36.6 */
     let initialCanvasX, initialCanvasY, startMouseScreenX, startMouseScreenY, isDragging = false;
-    handle.onmousedown = function(e) {
-        if (e.button !== 0 || !canvas || !canvas.ready || !canvas.stage?.scale) return; 
-        isDragging = true; startMouseScreenX = e.clientX; startMouseScreenY = e.clientY;
-        initialCanvasX = gmOverlayCanvasState.x; initialCanvasY = gmOverlayCanvasState.y;
-        document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
-        e.preventDefault(); 
-    };
-    function onMouseMove(e) {
-        if (!isDragging || !canvas || !canvas.ready || !canvas.stage?.scale?.x || canvas.stage.scale.x === 0) return; 
-        const dX = (e.clientX - startMouseScreenX) / canvas.stage.scale.x;
-        const dY = (e.clientY - startMouseScreenY) / canvas.stage.scale.y;
-        gmOverlayCanvasState.x = initialCanvasX + dX; gmOverlayCanvasState.y = initialCanvasY + dY;
-        renderGMOverlayFromCanvasState(); 
-    }
+    handle.onmousedown = function(e) { if (e.button !== 0 || !canvas?.ready || !canvas.stage?.scale) return; isDragging = true; startMouseScreenX = e.clientX; startMouseScreenY = e.clientY; initialCanvasX = gmOverlayCanvasState.x; initialCanvasY = gmOverlayCanvasState.y; document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp); e.preventDefault(); };
+    function onMouseMove(e) { if (!isDragging || !canvas?.ready || !canvas.stage?.scale?.x || canvas.stage.scale.x === 0) return; const dX = (e.clientX - startMouseScreenX) / canvas.stage.scale.x; const dY = (e.clientY - startMouseScreenY) / canvas.stage.scale.y; gmOverlayCanvasState.x = initialCanvasX + dX; gmOverlayCanvasState.y = initialCanvasY + dY; renderGMOverlayFromCanvasState(); }
     function onMouseUp() { isDragging = false; document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); }
 }
-function makeResizable(element, handle) { /* Same as v36.5 */
+function makeResizable(element, handle) { /* Same as v36.6 */
     let startMouseScreenX, initialCanvasWidth, isResizing = false; const aspectRatio = 16 / 9;
-    handle.onmousedown = function(e) {
-        if (e.button !== 0 || !canvas || !canvas.ready || !canvas.stage?.scale) return; 
-        e.preventDefault(); e.stopPropagation(); isResizing = true; startMouseScreenX = e.clientX;
-        initialCanvasWidth = gmOverlayCanvasState.width; 
-        document.addEventListener('mousemove', doResize); document.addEventListener('mouseup', stopResize);
-    };
-    function doResize(e) {
-        if(!isResizing || !canvas || !canvas.ready || !canvas.stage?.scale?.x || canvas.stage.scale.x === 0) return; 
-        let nCW = initialCanvasWidth + ((e.clientX - startMouseScreenX) / canvas.stage.scale.x);
-        const minWidthCanvas = 160 / canvas.stage.scale.x; 
-        if (nCW < minWidthCanvas) nCW = minWidthCanvas;
-        gmOverlayCanvasState.width = nCW; gmOverlayCanvasState.height = nCW / aspectRatio; 
-        renderGMOverlayFromCanvasState(); 
-    }
+    handle.onmousedown = function(e) { if (e.button !== 0 || !canvas?.ready || !canvas.stage?.scale) return; e.preventDefault(); e.stopPropagation(); isResizing = true; startMouseScreenX = e.clientX; initialCanvasWidth = gmOverlayCanvasState.width; document.addEventListener('mousemove', doResize); document.addEventListener('mouseup', stopResize); };
+    function doResize(e) { if(!isResizing || !canvas?.ready || !canvas.stage?.scale?.x || canvas.stage.scale.x === 0) return; let nCW = initialCanvasWidth + ((e.clientX - startMouseScreenX) / canvas.stage.scale.x); const minWidthCanvas = 160 / canvas.stage.scale.x; if (nCW < minWidthCanvas) nCW = minWidthCanvas; gmOverlayCanvasState.width = nCW; gmOverlayCanvasState.height = nCW / aspectRatio; renderGMOverlayFromCanvasState(); }
     function stopResize() { isResizing = false; document.removeEventListener('mousemove', doResize); document.removeEventListener('mouseup', stopResize); }
 }
-function sendOverlayViewToPlayerScreen() { /* Same as v36.4 (includes splashActive/splashUrl) */
+
+function sendOverlayViewToPlayerScreen() { /* Same as v36.6 */
     if (!gmOverlayDiv || !gmOverlayCanvasState.visible) { ui.notifications.warn("IRLMod: GM Overlay is not active."); return; }
     if (!canvas || !canvas.ready) { ui.notifications.error("IRLMod: Main canvas not ready."); return; }
     const viewRectangle = { x: gmOverlayCanvasState.x, y: gmOverlayCanvasState.y, width: gmOverlayCanvasState.width, height: gmOverlayCanvasState.height };
@@ -185,9 +160,10 @@ function sendOverlayViewToPlayerScreen() { /* Same as v36.4 (includes splashActi
     sendCommandToPlayerView({ action: "setViewFromRectangle", rect: viewRectangle, splashActive: isSplashActiveOnPlayer, splashUrl: splashImageURL }); 
     ui.notifications.info("IRLMod: Sent overlay view (with splash state) to Player Screen.");
 }
-function togglePlayerSplashImage() { /* Same as v36.5 */
+
+function togglePlayerSplashImage() { /* Same as v36.6 */
     splashImageURL = game.settings.get(MODULE_ID, "splashImageURL"); 
-    if (!splashImageURL && !isSplashActiveOnPlayer) { ui.notifications.warn("IRLMod: No Splash Image URL configured in module settings."); return; }
+    if (!splashImageURL && !isSplashActiveOnPlayer) { ui.notifications.warn("IRLMod: No Splash Image URL configured."); return; }
     isSplashActiveOnPlayer = !isSplashActiveOnPlayer;
     sendCommandToPlayerView({ action: isSplashActiveOnPlayer ? "showSplashImage" : "hideSplashImage", url: splashImageURL });
     ui.notifications.info(`IRLMod: ${isSplashActiveOnPlayer ? "Showing" : "Hiding"} splash image on player screen.`);
@@ -195,36 +171,66 @@ function togglePlayerSplashImage() { /* Same as v36.5 */
     if (toggleSplashButton.length) { toggleSplashButton.toggleClass('active', isSplashActiveOnPlayer); }
     renderGMOverlayFromCanvasState(); 
 }
-async function ensureDedicatedUserExists() { /* Same as v36.5 */
-    if (!game.user.isGM) return; 
+
+async function ensureDedicatedUserExists() {
+    if (!game.user.isGM) return null; // Only GMs can create users
+
     dedicatedPlayerUsername = game.settings.get(MODULE_ID, "dedicatedPlayerUsername");
-    let playerUser = game.users.find(u => u.name === dedicatedPlayerUsername);
+    if (!dedicatedPlayerUsername || dedicatedPlayerUsername.trim() === "") {
+        ui.notifications.error("IRLMod: Dedicated player username setting is empty. Cannot create or find user.");
+        return null;
+    }
+
+    let playerUser = game.users.find(u => u.name.toLowerCase() === dedicatedPlayerUsername.toLowerCase());
+
     if (!playerUser) {
         try {
-            playerUser = await User.create({ name: dedicatedPlayerUsername, role: CONST.USER_ROLES.PLAYER });
-            ui.notifications.info(`IRLMod: Created dedicated player user "${dedicatedPlayerUsername}".`);
-        } catch (err) { ui.notifications.error(`IRLMod: Failed to create user "${dedicatedPlayerUsername}".`); console.error("IRLMod | GM: Error creating user:", err); }
+            console.log(`IRLMod | GM: Dedicated player user "${dedicatedPlayerUsername}" not found. Attempting to create.`);
+            // Ensure password field is at least present, even if empty string for no password
+            const createData = {
+                name: dedicatedPlayerUsername,
+                role: CONST.USER_ROLES.PLAYER,
+                password: "" 
+            };
+            playerUser = await User.create(createData);
+            ui.notifications.info(`IRLMod: Created dedicated player user "${dedicatedPlayerUsername}". They have no password set.`);
+            console.log(`IRLMod | GM: Successfully created user "${dedicatedPlayerUsername}" with ID ${playerUser.id}`);
+        } catch (err) {
+            ui.notifications.error(`IRLMod: Failed to create dedicated player user "${dedicatedPlayerUsername}". Check console (F12) for details.`);
+            console.error("IRLMod | GM: Error creating user:", err);
+            return null; // Return null on failure
+        }
     }
     return playerUser; 
 }
-async function launchOrFocusPlayerView() { /* Same as v36.5 */
-    await ensureDedicatedUserExists(); 
-    dedicatedPlayerUsername = game.settings.get(MODULE_ID, "dedicatedPlayerUsername") || "ScreenGoblin";
+
+async function launchOrFocusPlayerView() {
+    const playerUser = await ensureDedicatedUserExists(); 
+    if (!playerUser) { // If user creation/retrieval failed
+        ui.notifications.error("IRLMod: Could not ensure dedicated player user exists. Cannot open player view.");
+        return;
+    }
+    // dedicatedPlayerUsername is already set by ensureDedicatedUserExists or from settings
+    
     const joinUrl = `${window.location.origin}/join?username=${encodeURIComponent(dedicatedPlayerUsername)}`;
+    
     if (playerWindowRef && !playerWindowRef.closed) {
-        try { playerWindowRef.focus(); ui.notifications.info(`IRLMod: Player View focused for '${dedicatedPlayerUsername}'.`); } 
+        try { playerWindowRef.focus(); ui.notifications.info(`IRLMod: Player View window focused for '${dedicatedPlayerUsername}'.`); } 
         catch (e) { 
             playerWindowRef = window.open(joinUrl, PLAYER_WINDOW_NAME, 'width=1280,height=720,noopener,noreferrer');
             if (playerWindowRef) ui.notifications.info(`IRLMod: Player View refocused/reopened for '${dedicatedPlayerUsername}'.`);
-            else ui.notifications.warn(`IRLMod: Could not open/focus Player View. Pop-ups might be blocked.`);
+            else ui.notifications.warn(`IRLMod: Could not open/focus Player View. Pop-ups might be blocked by your browser.`);
         }
     } else {
         playerWindowRef = window.open(joinUrl, PLAYER_WINDOW_NAME, 'width=1280,height=720,noopener,noreferrer');
         if (playerWindowRef) { ui.notifications.info(`IRLMod: Player View window opening for '${dedicatedPlayerUsername}'.`); } 
-        else { ui.notifications.warn(`IRLMod: Failed to open Player View initially. Pop-ups might be blocked.`); }
+        else { ui.notifications.warn(`IRLMod: Failed to open Player View window initially. Pop-ups might be blocked. The window might still open after a delay by the browser.`); }
     }
 }
-Hooks.once('init', () => { /* Same as v36.5 */
+
+// --- HOOKS ---
+// Hooks.once('init', ...) - Settings registration is the same as v36.6
+Hooks.once('init', () => { 
     console.log("IRLMod | GM: Init hook started.");
     game.settings.register(MODULE_ID, "dedicatedPlayerUsername", { name: "irlmod.settingDedicatedPlayerUsernameName", hint: "irlmod.settingDedicatedPlayerUsernameHint", scope: "world", config: true, type: String, default: "ScreenGoblin", onChange: value => { dedicatedPlayerUsername = value; } });
     game.settings.register(MODULE_ID, "splashImageURL", { name: "irlmod.settingSplashImageURL.name", hint: "irlmod.settingSplashImageURL.hint", scope: "world", config: true, type: String, default: "", filePicker: "imagevideo", onChange: value => { splashImageURL = value; } });
@@ -235,26 +241,44 @@ Hooks.once('init', () => { /* Same as v36.5 */
     game.settings.register(MODULE_ID, "piServerPort", { name: "irlmod.settingPiServerPort.name", hint: "irlmod.settingPiServerPort.hint", scope: "world", config: true, type: Number, default: 8765, onChange: value => { piServerPort = value; } });
     game.settings.register(MODULE_ID, "playerPerformanceMode", { name: "irlmod.settingPlayerPerformanceMode.name", hint: "irlmod.settingPlayerPerformanceMode.hint", scope: "world", config: true, type: String, default: "high", choices: { "low": "IRLMOD.performanceModes.low", "medium": "IRLMOD.performanceModes.medium", "high": "IRLMOD.performanceModes.high", "auto": "IRLMOD.performanceModes.auto"} });
     dedicatedPlayerUsername = game.settings.get(MODULE_ID, "dedicatedPlayerUsername"); splashImageURL = game.settings.get(MODULE_ID, "splashImageURL"); tvPhysicalWidthInches = game.settings.get(MODULE_ID, "tvPhysicalWidthInches"); tvResolutionWidthPixels = game.settings.get(MODULE_ID, "tvResolutionWidthPixels"); tvDesiredGridInches = game.settings.get(MODULE_ID, "tvDesiredGridInches"); piServerIP = game.settings.get(MODULE_ID, "piServerIP"); piServerPort = game.settings.get(MODULE_ID, "piServerPort");
-    console.log(`IRLMod | GM Init hook finished (v36.6). TV Defaults: ${tvPhysicalWidthInches}" @ ${tvResolutionWidthPixels}px`);
+    console.log(`IRLMod | GM Init hook finished (v36.7). TV Defaults: ${tvPhysicalWidthInches}" @ ${tvResolutionWidthPixels}px`);
 });
-Hooks.on("canvasPan", (canvasObj, panInfo) => { /* Same */ if (gmOverlayDiv && gmOverlayCanvasState.visible) renderGMOverlayFromCanvasState(); });
-Hooks.on("canvasReady", () => { /* Same */ if (gmOverlayDiv && gmOverlayCanvasState.visible) { const defaultX = 500, defaultY = 500; if (gmOverlayDiv.style.display !== 'none' && Math.abs(gmOverlayCanvasState.x - defaultX) < 1 && Math.abs(gmOverlayCanvasState.y - defaultY) < 1 && (!gmOverlayCanvasState.width || gmOverlayCanvasState.width < 10 )) { if (canvas?.ready && canvas.dimensions) { const viewRect = canvas.dimensions.rect; gmOverlayCanvasState.width = viewRect.width * 0.6; gmOverlayCanvasState.height = gmOverlayCanvasState.width / (16/9); gmOverlayCanvasState.x = viewRect.x + (viewRect.width - gmOverlayCanvasState.width) / 2; gmOverlayCanvasState.y = viewRect.y + (viewRect.height - gmOverlayCanvasState.height) / 2; } } renderGMOverlayFromCanvasState(); } });
-Hooks.on("renderSceneControls", (sceneControlsApp, htmlElement, data) => { /* Same as v36.5 */
+
+Hooks.on("canvasPan", (canvasObj, panInfo) => { if (gmOverlayDiv && gmOverlayCanvasState.visible) renderGMOverlayFromCanvasState(); });
+Hooks.on("canvasReady", () => { if (gmOverlayDiv && gmOverlayCanvasState.visible) { const defaultX = 500, defaultY = 500; if (gmOverlayDiv.style.display !== 'none' && Math.abs(gmOverlayCanvasState.x - defaultX) < 1 && Math.abs(gmOverlayCanvasState.y - defaultY) < 1 && (!gmOverlayCanvasState.width || gmOverlayCanvasState.width < 10 )) { if (canvas?.ready && canvas.dimensions) { const viewRect = canvas.dimensions.rect; gmOverlayCanvasState.width = viewRect.width * 0.6; gmOverlayCanvasState.height = gmOverlayCanvasState.width / (16/9); gmOverlayCanvasState.x = viewRect.x + (viewRect.width - gmOverlayCanvasState.width) / 2; gmOverlayCanvasState.y = viewRect.y + (viewRect.height - gmOverlayCanvasState.height) / 2; } } renderGMOverlayFromCanvasState(); } });
+
+// This is the corrected renderSceneControls hook from v36.5
+Hooks.on("renderSceneControls", (sceneControlsApp, htmlElement, data) => {
     const jqSceneControlsRoot = $(htmlElement);
-    const openButtonDataControl = "irlmod-open-player-screen"; const toggleOverlayButtonDataControl = "irlmod-toggle-overlay"; const toggleSplashButtonDataControl = "irlmod-toggle-splash"; 
-    const openTitle = game.i18n.localize("IRLMOD.OpenPlayerViewTitle"); const toggleOverlayTitle = game.i18n.localize("IRLMOD.ToggleOverlayTitle"); const toggleSplashTitle = game.i18n.localize("IRLMOD.ToggleSplashImageTitle"); 
+    const openButtonDataControl = "irlmod-open-player-screen"; 
+    const toggleOverlayButtonDataControl = "irlmod-toggle-overlay";
+    const toggleSplashButtonDataControl = "irlmod-toggle-splash"; 
+
+    const openTitle = game.i18n.localize("IRLMOD.OpenPlayerViewTitle");
+    const toggleOverlayTitle = game.i18n.localize("IRLMOD.ToggleOverlayTitle");
+    const toggleSplashTitle = game.i18n.localize("IRLMOD.ToggleSplashImageTitle"); 
+
     const openButtonHtml = $(`<li class="scene-control irlmod-custom-control" data-control="${openButtonDataControl}"><button type="button" class="control ui-control layer icon" title="${openTitle}" aria-label="${openTitle}"><i class="fas fa-tv"></i></button></li>`);
     const toggleOverlayButtonHtml = $(`<li class="scene-control irlmod-custom-control" data-control="${toggleOverlayButtonDataControl}"><button type="button" class="control ui-control layer icon" title="${toggleOverlayTitle}" aria-label="${toggleOverlayTitle}"><i class="far fa-square"></i></button></li>`);
     const toggleSplashButtonHtml = $(`<li class="scene-control irlmod-custom-control" data-control="${toggleSplashButtonDataControl}"><button type="button" class="control ui-control layer icon" title="${toggleSplashTitle}" aria-label="${toggleSplashTitle}"><i class="fas fa-image"></i></button></li>`);
+    
     const targetMenu = jqSceneControlsRoot.find('menu#scene-controls-layers').first(); 
     if (targetMenu.length) {
         if (targetMenu.find(`li[data-control="${openButtonDataControl}"]`).length === 0) targetMenu.append(openButtonHtml);
         if (targetMenu.find(`li[data-control="${toggleOverlayButtonDataControl}"]`).length === 0) targetMenu.append(toggleOverlayButtonHtml);
         if (targetMenu.find(`li[data-control="${toggleSplashButtonDataControl}"]`).length === 0) targetMenu.append(toggleSplashButtonHtml); 
-    } else { const controlsList = jqSceneControlsRoot.find('ol.main-controls').first(); if(controlsList.length) { if (controlsList.find(`li[data-control="${openButtonDataControl}"]`).length === 0) controlsList.append(openButtonHtml); if (controlsList.find(`li[data-control="${toggleOverlayButtonDataControl}"]`).length === 0) controlsList.append(toggleOverlayButtonHtml); if (controlsList.find(`li[data-control="${toggleSplashButtonDataControl}"]`).length === 0) controlsList.append(toggleSplashButtonHtml);  } else { console.error("IRLMod | Could not find any suitable menu to add control buttons."); return; } }
+    } else { 
+        const controlsList = jqSceneControlsRoot.find('ol.main-controls').first();
+        if(controlsList.length) {
+             if (controlsList.find(`li[data-control="${openButtonDataControl}"]`).length === 0) controlsList.append(openButtonHtml);
+             if (controlsList.find(`li[data-control="${toggleOverlayButtonDataControl}"]`).length === 0) controlsList.append(toggleOverlayButtonHtml);
+             if (controlsList.find(`li[data-control="${toggleSplashButtonDataControl}"]`).length === 0) controlsList.append(toggleSplashButtonHtml); 
+        } else { console.error("IRLMod | Could not find any suitable menu to add control buttons."); return; }
+    }
+    
     jqSceneControlsRoot.find(`li[data-control="${openButtonDataControl}"] button`).off('click.irlmodOpen').on('click.irlmodOpen', launchOrFocusPlayerView);
     jqSceneControlsRoot.find(`li[data-control="${toggleOverlayButtonDataControl}"] button`).off('click.irlmodToggleOverlay').on('click.irlmodToggleOverlay', toggleGMOverlay);
     jqSceneControlsRoot.find(`li[data-control="${toggleSplashButtonDataControl}"] button`).off('click.irlmodToggleSplash').on('click.irlmodToggleSplash', togglePlayerSplashImage); 
 });
 
-console.log("IRLMod | GM Screen Script Loaded (v36.6 - Overlay Toggle & Splash Sync Refinement)");
+console.log("IRLMod | GM Screen Script Loaded (v36.7 - Auto-Create User)");
