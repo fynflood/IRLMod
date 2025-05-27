@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi Touch Server Setup Guide</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2, h3 {
+            color: #0056b3;
+        }
+        h1 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        h2 {
+            margin-top: 30px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        h3 {
+            margin-top: 20px;
+        }
+        pre {
+            background-color: #e9e9e9;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 0.9em;
+            white-space: pre-wrap; /* Ensures long lines wrap */
+            word-wrap: break-word; /* Ensures long words break */
+        }
+        ul {
+            list-style-type: disc;
+            margin-left: 20px;
+            padding-left: 0;
+        }
+        ul li {
+            margin-bottom: 8px;
+        }
+        strong {
+            font-weight: bold;
+        }
+        .note {
+            background-color: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 10px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Raspberry Pi Touch Server Setup Guide</h1>
+
+        <p>This guide will walk you through setting up and running the Raspberry Pi Touch Server, including installing necessary Python modules, generating SSL certificates for secure WebSocket communication, configuring your Raspberry Pi's hostname, and setting up the server to start automatically at boot using a systemd service.</p>
+
+        <h2>Prerequisites</h2>
+        <p>Before you begin, ensure your Raspberry Pi has the following installed:</p>
+        <ul>
+            <li><strong>Python 3:</strong> Most Raspberry Pi OS installations come with Python 3 pre-installed. You can check by running <code>python3 --version</code>.</li>
+            <li><strong>pip (Python Package Installer):</strong> Usually installed with Python 3. Verify with <code>pip3 --version</code>.</li>
+            <li><strong>OpenSSL:</strong> This is typically pre-installed on Linux distributions. You can check with <code>openssl version</code>.</li>
+        </ul>
+
+        <h2>Step 1: Set Raspberry Pi Hostname</h2>
+        <p>For consistent network identification and SSL certificate generation, it's recommended to set your Raspberry Pi's hostname to "irlmod".</p>
+        <ol>
+            <li>
+                <h3>Edit the hostname file:</h3>
+                <pre><code>sudo nano /etc/hostname</code></pre>
+                <p>Change the content of this file to <code>irlmod</code>. Save and exit (Ctrl+X, Y, Enter).</p>
+            </li>
+            <li>
+                <h3>Edit the hosts file:</h3>
+                <pre><code>sudo nano /etc/hosts</code></pre>
+                <p>Find the line that starts with <code>127.0.1.1</code> and change the hostname part to <code>irlmod</code>. It should look something like:<br><code>127.0.1.1    irlmod</code><br>Save and exit.</p>
+            </li>
+            <li>
+                <h3>Reboot your Raspberry Pi:</h3>
+                <p>For the hostname change to take full effect, you need to reboot.</p>
+                <pre><code>sudo reboot</code></pre>
+                <p>After rebooting, you can verify the hostname by running <code>hostname</code> in the terminal.</p>
+            </li>
+        </ol>
+
+        <h2>Step 2: Project Setup</h2>
+        <p>First, create a dedicated folder for your project and place your Python script (<code>touch_server.py</code>) inside it.</p>
+        <ol>
+            <li>
+                <h3>Create a project directory:</h3>
+                <pre><code>mkdir raspberry_pi_touch_server
+cd raspberry_pi_touch_server</code></pre>
+            </li>
+            <li>
+                <h3>Save your Python script:</h3>
+                <p>Save your Python script (the one you provided) as <code>touch_server.py</code> inside this new directory.</p>
+            </li>
+        </ol>
+
+        <h2>Step 3: Create <code>requirements.txt</code></h2>
+        <p>This file lists all the Python libraries your script depends on.</p>
+        <ol>
+            <li>
+                <h3>Create the file:</h3>
+                <p>Inside your <code>raspberry_pi_touch_server</code> directory, create a new file named <code>requirements.txt</code> with the following content:</p>
+                <pre><code>websockets
+python-evdev</code></pre>
+            </li>
+        </ol>
+
+        <h2>Step 4: Create <code>generate_certs.sh</code></h2>
+        <p>This script will generate the self-signed SSL certificates required for secure WebSocket (WSS) communication. It will use "irlmod" as the Common Name for the certificate, matching your Raspberry Pi's hostname.</p>
+        <ol>
+            <li>
+                <h3>Create the file:</h3>
+                <p>Inside your <code>raspberry_pi_touch_server</code> directory, create a new file named <code>generate_certs.sh</code> with the following content:</p>
+                <pre><code>#!/bin/bash
+
+# This script generates a self-signed SSL certificate and private key
+# for use with the Raspberry Pi Touch Server.
+# These certificates are suitable for local development and testing.
+# For production environments, you should obtain certificates from a trusted Certificate Authority (CA).
+
+# Define paths for certificates
+CERT_DIR="./certs"
+CERT_FILE="$CERT_DIR/cert.pem"
+KEY_FILE="$CERT_DIR/key.pem"
+
+# Create the certs directory if it doesn't exist
+mkdir -p "$CERT_DIR"
+
+# Generate a new private key (2048-bit RSA)
+echo "Generating private key: $KEY_FILE"
+openssl genrsa -out "$KEY_FILE" 2048
+
+# Generate a self-signed certificate using the private key
+# -x509: output a self-signed certificate instead of a certificate request
+# -nodes: don't encrypt the private key
+# -days 365: certificate is valid for 365 days
+# -new: generate a new certificate request
+# -key: specify the private key to use
+# -out: specify the output file for the certificate
+# -subj: set the subject/distinguished name (CN=Common Name, which is your hostname)
+echo "Generating self-signed certificate: $CERT_FILE"
+openssl req -x509 -nodes -days 365 -new -key "$KEY_FILE" -out "$CERT_FILE" -subj "/CN=irlmod"
+
+echo "Certificates generated successfully!"
+echo "Private Key: $KEY_FILE"
+echo "Certificate: $CERT_FILE"
+echo ""
+echo "NOTE: These are self-signed certificates and will cause browser warnings."
+echo "They are suitable for testing and local network use, but not for public-facing production."</code></pre>
+            </li>
+            <li>
+                <h3>Make the script executable:</h3>
+                <pre><code>chmod +x generate_certs.sh</code></pre>
+            </li>
+        </ol>
+
+        <h2>Step 5: Install Python Dependencies</h2>
+        <p>It's highly recommended to use a Python virtual environment to keep your project's dependencies separate from your system's global Python packages.</p>
+        <ol>
+            <li>
+                <h3>Create a virtual environment:</h3>
+                <pre><code>python3 -m venv venv</code></pre>
+            </li>
+            <li>
+                <h3>Activate the virtual environment:</h3>
+                <pre><code>source venv/bin/activate</code></pre>
+                <p>(You'll see <code>(venv)</code> appear in your terminal prompt, indicating the virtual environment is active.)</p>
+            </li>
+            <li>
+                <h3>Install dependencies:</h3>
+                <pre><code>pip install -r requirements.txt</code></pre>
+            </li>
+        </ol>
+
+        <h2>Step 6: Generate SSL Certificates (Optional, only if you need WSS)</h2>
+        <p>If you plan to run the server with SSL (WSS), you need to generate the certificates.</p>
+        <ol>
+            <li>
+                <h3>Run the certificate generation script:</h3>
+                <pre><code>./generate_certs.sh</code></pre>
+                <p>This will create a <code>certs</code> directory in your project folder and place <code>cert.pem</code> and <code>key.pem</code> inside it.</p>
+                <div class="note">
+                    <strong>Note:</strong> These are self-signed certificates. Your browser or client application will likely show a warning about them being untrusted. This is normal for local testing.
+                </div>
+            </li>
+        </ol>
+
+        <h2>Step 7: Run the Server (Manual Test)</h2>
+        <p>Now you can run your <code>touch_server.py</code> script to test it manually.</p>
+        <div class="note">
+            <strong>Important Note on Permissions:</strong><br>
+            Your script needs access to <code>/dev/input/event4</code>. You might need to run it with <code>sudo</code> if your user doesn't have the necessary permissions, or adjust udev rules for persistent access.
+        </div>
+        <ul>
+            <li>
+                <h3>To run without SSL (using <code>ws://</code>):</h3>
+                <pre><code>python3 touch_server.py</code></pre>
+                <p>The server will start on <code>ws://0.0.0.0:8765</code>.</p>
+            </li>
+            <li>
+                <h3>To run with SSL (using <code>wss://</code>):</h3>
+                <p>First, ensure you've completed Step 6 to generate the certificates.</p>
+                <pre><code>python3 touch_server.py --ssl</code></pre>
+                <p>The server will start on <code>wss://0.0.0.0:8765</code>.</p>
+            </li>
+        </ul>
+
+        <h2>Step 8: Deactivate Virtual Environment (When finished)</h2>
+        <p>When you're done working on the project or before configuring the systemd service, you can deactivate the virtual environment:</p>
+        <pre><code>deactivate</code></pre>
+
+        <h2>Step 9: Configure as a Systemd Service (Start at Boot)</h2>
+        <p>To make your server start automatically when your Raspberry Pi boots, you can set it up as a systemd service.</p>
+        <ol>
+            <li>
+                <h3>Create the service file:</h3>
+                <p>Use <code>sudo</code> to create and edit the service file in the systemd directory. Replace <code>pi</code> with your actual username if it's different.</p>
+                <pre><code>sudo nano /etc/systemd/system/irlmod.service</code></pre>
+            </li>
+            <li>
+                <h3>Add the service configuration:</h3>
+                <p>Paste the following content into the <code>irlmod.service</code> file. Make sure the <code>User</code>, <code>WorkingDirectory</code>, and <code>ExecStart</code> paths are correct for your setup. Assuming your project folder <code>raspberry_pi_touch_server</code> is in your home directory (<code>/home/pi/</code>).</p>
+                <pre><code>[Unit]
+Description=IRLMod Raspberry Pi Touch Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=idle
+User=pi
+WorkingDirectory=/home/pi/raspberry_pi_touch_server/
+ExecStart=/home/pi/raspberry_pi_touch_server/venv/bin/python /home/pi/raspberry_pi_touch_server/touch_server.py --ssl
+Restart=on-failure # Optional: Restart the service if it fails
+# RestartSec=5     # Optional: Time to wait before restarting
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+                <div class="note">
+                    <strong>Note on <code>ExecStart</code>:</strong> I've included <code>--ssl</code> in the <code>ExecStart</code> line. If you want the service to start <em>without</em> SSL by default, remove <code>--ssl</code> from this line.
+                </div>
+            </li>
+            <li>
+                <h3>Reload systemd, enable, and start the service:</h3>
+                <p>After saving the file, you need to tell systemd to reload its configuration, enable the service to start at boot, and then start it immediately.</p>
+                <pre><code>sudo systemctl daemon-reload
+sudo systemctl enable irlmod.service
+sudo systemctl start irlmod.service</code></pre>
+            </li>
+            <li>
+                <h3>Check the service status (optional):</h3>
+                <p>To verify that your service is running correctly, you can check its status:</p>
+                <pre><code>sudo systemctl status irlmod.service</code></pre>
+                <p>Press <code>q</code> to exit the status view.</p>
+            </li>
+        </ol>
+        <p>Now, your Raspberry Pi Touch Server should start automatically every time your Raspberry Pi boots up!</p>
+    </div>
+</body>
+</html>
+
