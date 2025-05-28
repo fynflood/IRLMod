@@ -11,7 +11,7 @@ import argparse # Import argparse
 # --- Configuration ---
 HOST = "0.0.0.0"
 PORT = 8765
-IR_FRAME_DEVICE_PATH = '/dev/input/event4' 
+IR_FRAME_DEVICE_PATH = '/dev/input/event4' # This may not be event4 on your pi, please check and update if needed
 
 MAX_RAW_X = 32767.0 
 MAX_RAW_Y = 32767.0

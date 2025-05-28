@@ -114,7 +114,6 @@
         "medium": "IRLMOD.performanceModes.medium",
         "high": "IRLMOD.performanceModes.high",
         "maximum": "IRLMOD.performanceModes.maximum",
-        "maximum": "IRLMOD.performanceModes.maximum",
         "auto": "IRLMOD.performanceModes.auto"
       }
     }
