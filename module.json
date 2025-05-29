@@ -2,7 +2,7 @@
   "id": "irlmod",
   "title": "IRLMod",
   "description": "A module to display and manage a dedicated player view on a TV with an IR Touch Frame for in-person games",
-  "version": "0.9.2", 
+  "version": "0.9.3", 
   "compatibility": { 
     "minimum": "13", 
     "verified": "13" 
@@ -117,8 +117,8 @@
       }
     }
   ],
-  "manifest": "https://github.com/fynflood/IRLMod/releases/download/v0.9.2/module.json", 
-  "download": "https://github.com/fynflood/IRLMod/releases/download/v0.9.2/irlmod.zip", 
+  "manifest": "https://github.com/fynflood/IRLMod/releases/download/v0.9.3/module.json", 
+  "download": "https://github.com/fynflood/IRLMod/releases/download/v0.9.3/irlmod.zip", 
   "protected": false,
   "license": "LICENSE.txt"
 }
