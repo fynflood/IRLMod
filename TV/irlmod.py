@@ -7,6 +7,9 @@ from evdev import InputDevice, categorize, ecodes, AbsInfo
 import ssl 
 import pathlib
 import argparse # Import argparse
+import subprocess
+import urllib.request
+import socket
 
 # --- Configuration ---
 HOST = "0.0.0.0"
@@ -122,76 +125,155 @@ async def read_ir_frame_input(device): # Same as v0.2.6
                                                 "y": current_s_data["current_raw_y"] / MAX_RAW_Y})
                     reset_slot_state(slot_id, f"{msg_type} processing complete for ID {current_s_data.get('tracking_id')}")
 
-async def main(use_ssl_flag): # Added use_ssl_flag argument
+def get_ip_address(interface):
+    try:
+        # Use simple ip addr shell command to be robust
+        result = subprocess.check_output(['ip', '-4', 'addr', 'show', interface], text=True)
+        for line in result.split('\n'):
+            if 'inet' in line:
+                return line.strip().split(' ')[1].split('/')[0]
+    except Exception:
+        return None
+    return None
+
+def send_discord_webhook(webhook_url, mode, ips_dict):
+    if not webhook_url: return
+    
+    embed = {
+        "title": "IRLMod Service Started",
+        "color": 5763719, # Greenish
+        "fields": [
+            {"name": "Mode", "value": mode, "inline": False},
+        ]
+    }
+    
+    for iface, ip in ips_dict.items():
+        if ip:
+            embed["fields"].append({"name": iface, "value": ip, "inline": True})
+            
+    payload = {
+        "embeds": [embed]
+    }
+    
+    try:
+        req = urllib.request.Request(
+            webhook_url, 
+            data=json.dumps(payload).encode('utf-8'),
+            headers={'Content-Type': 'application/json', 'User-Agent': 'IRLMod/1.0'}
+        )
+        with urllib.request.urlopen(req) as response:
+            print(f"Discord notification sent. Status: {response.status}")
+    except Exception as e:
+        print(f"Failed to send Discord notification: {e}")
+
+async def main(args): 
     global max_slots_from_device
     device = None 
+    dummy_mode = False
+    
     print(f"Attempting to open IR Frame device: {IR_FRAME_DEVICE_PATH}")
     try:
         device = InputDevice(IR_FRAME_DEVICE_PATH)
         print(f"Successfully opened {device.name} ({device.phys or 'N/A'}). Listening...")
         abs_capabilities = device.capabilities().get(ecodes.EV_ABS)
-        if not abs_capabilities: print("CRITICAL: Device does not report EV_ABS capabilities."); device.close(); return
-        has_mt_slot, has_mt_tracking_id = False, False
-        for code, absinfo in abs_capabilities:
-            if code == ecodes.ABS_MT_SLOT: has_mt_slot = True; max_slots_from_device = absinfo.max + 1; # print(f"Device reports ABS_MT_SLOT with max_slots: {max_slots_from_device}") # Less verbose
-            elif code == ecodes.ABS_MT_TRACKING_ID: has_mt_tracking_id = True;
-        if not has_mt_slot: print("CRITICAL: Device does not report ABS_MT_SLOT."); device.close(); return
-        # if not has_mt_tracking_id: print("WARNING: Device does not report ABS_MT_TRACKING_ID.") # Can be noisy
+        if not abs_capabilities: 
+            print("CRITICAL: Device does not report EV_ABS capabilities.")
+            device.close()
+            dummy_mode = True
+        else:
+            has_mt_slot, has_mt_tracking_id = False, False
+            for code, absinfo in abs_capabilities:
+                if code == ecodes.ABS_MT_SLOT: has_mt_slot = True; max_slots_from_device = absinfo.max + 1; 
+                elif code == ecodes.ABS_MT_TRACKING_ID: has_mt_tracking_id = True;
+            if not has_mt_slot: 
+                print("CRITICAL: Device does not report ABS_MT_SLOT.")
+                device.close()
+                dummy_mode = True
+    except FileNotFoundError:
+        print(f"Device not found at {IR_FRAME_DEVICE_PATH}. Falling back to Dummy Mode.")
+        dummy_mode = True
     except Exception as e:
-        print(f"Error opening IR Frame or checking capabilities: {e}")
-        print("Ensure device path is correct and you have permissions.")
-        if device and hasattr(device, 'fd') and device.fd is not None: device.close()
-        return
+        print(f"Error opening IR Frame: {e}. Falling back to Dummy Mode.")
+        dummy_mode = True
+
+    if dummy_mode:
+        print("--- DUMMY MODE ACTIVE ---")
+        print("Server will start but no IR touch events will be processed.")
+
+    # Gather IPs
+    ips = {
+        "eth0": get_ip_address("eth0"),
+        "wlan0": get_ip_address("wlan0"),
+        "tailscale0": get_ip_address("tailscale0")
+    }
+    
+    # Send Notification
+    active_mode = "Dummy Mode (No IR)" if dummy_mode else "IR Mode (Active)"
+    if args.discord_webhook:
+        send_discord_webhook(args.discord_webhook, active_mode, ips)
+    else:
+        print("No discord webhook provided, skipping notification.")
 
     ssl_context = None
-    if use_ssl_flag: # Check the flag passed from command line
+    if args.ssl: 
         if CERT_PATH.is_file() and KEY_PATH.is_file():
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             ssl_context.load_cert_chain(CERT_PATH, KEY_PATH)
             print(f"SSL context loaded. Server will use WSS on port {PORT}.")
         else:
-            print(f"ERROR: --ssl flag was used, but SSL certificates not found at {CERT_PATH} or {KEY_PATH}.")
-            print("Cannot start WSS server. Generate certs or run without --ssl for ws://.")
+            print(f"ERROR: --ssl flag was used, but SSL certificates not found.")
             if device: device.close()
             return
     
-    protocol = "wss" if use_ssl_flag and ssl_context else "ws"
+    protocol = "wss" if args.ssl and ssl_context else "ws"
     server = await websockets.serve(register_client, HOST, PORT, ssl=ssl_context)
     print(f"WebSocket server started on {protocol}://{HOST}:{PORT}")
-    if max_slots_from_device > 0: # Only start reading if device init was successful
+
+    tasks = [asyncio.create_task(server.wait_closed())]
+    
+    input_task = None
+    if not dummy_mode and max_slots_from_device > 0:
         print(f"Touch processing initialized for {max_slots_from_device} slots.")
+        input_task = asyncio.create_task(read_ir_frame_input(device))
+        tasks.append(input_task)
+    elif dummy_mode:
+        print("Running in Dummy Mode. Input reader skipped.")
     else:
-        print("WARNING: Touch processing not fully initialized due to missing slot capabilities during setup.")
+        print("WARNING: Touch processing not fully initialized due to missing capabilities.")
 
-
-    input_task = asyncio.create_task(read_ir_frame_input(device))
     try:
-        await server.wait_closed()
+        await asyncio.gather(*tasks)
     finally:
-        print("Shutting down server and input reader...")
-        input_task.cancel()
-        try: await input_task
-        except asyncio.CancelledError: print("Input reader task cancelled.")
+        print("Shutting down...")
+        if input_task:
+            input_task.cancel()
+            try: await input_task
+            except asyncio.CancelledError: pass
         if device and hasattr(device, 'fd') and device.fd is not None: device.close()
-        print("Server and input reader stopped.")
+        print("Server stopped.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRLMod Raspberry Pi Touch Server.")
     parser.add_argument(
         "--ssl",
         action="store_true",
-        help="Enable WSS (Secure WebSocket) using SSL/TLS certificates. Requires cert.pem and key.pem."
+        help="Enable WSS (Secure WebSocket) using SSL/TLS certificates."
+    )
+    parser.add_argument(
+        "--discord-webhook",
+        type=str,
+        help="Discord Webhook URL for status updates."
     )
     args = parser.parse_args()
 
-    print(f"Starting IRLMod Raspberry Pi Touch Server (Multitouch v0.2.7 - Optional SSL)...")
+    print(f"Starting IRLMod Raspberry Pi Touch Server (Multitouch v0.2.8 - Optional SSL/Discord)...")
     if args.ssl:
         print("SSL (WSS) mode enabled via command line.")
     else:
         print("SSL (WSS) mode disabled. Using ws://.")
         
     try:
-        asyncio.run(main(args.ssl)) # Pass the SSL flag to main
+        asyncio.run(main(args)) 
     except KeyboardInterrupt:
         print("\nServer stopped by user.")
     except Exception as e:
