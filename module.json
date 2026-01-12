@@ -2,7 +2,7 @@
   "id": "irlmod",
   "title": "IRLMod",
   "description": "A module to display and manage a dedicated player view on a TV with an IR Touch Frame for in-person games",
-  "version": "0.9.7",
+  "version": "0.9.8",
   "compatibility": {
     "minimum": "13",
     "verified": "13"
