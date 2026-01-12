@@ -3,13 +3,14 @@ import asyncio
 import websockets
 import json
 import time
-from evdev import InputDevice, categorize, ecodes, AbsInfo
+from evdev import InputDevice, categorize, ecodes, AbsInfo, list_devices
 import ssl 
 import pathlib
 import argparse # Import argparse
 import subprocess
 import urllib.request
 import socket
+import random
 
 # --- Configuration ---
 HOST = "0.0.0.0"
@@ -125,6 +126,64 @@ async def read_ir_frame_input(device): # Same as v0.2.6
                                                 "y": current_s_data["current_raw_y"] / MAX_RAW_Y})
                     reset_slot_state(slot_id, f"{msg_type} processing complete for ID {current_s_data.get('tracking_id')}")
 
+async def simulate_dummy_input():
+    """Generates random touch events when no IR frame is present."""
+    print("Dummy Simulation: Started. Will simulate clicks every 5 seconds.")
+    try:
+        while True:
+            await asyncio.sleep(5) # Wait between events
+            
+            # Generate random coordinates (normalized 0.1 to 0.9 to stay on screen)
+            norm_x = random.uniform(0.1, 0.9)
+            norm_y = random.uniform(0.1, 0.9)
+            dummy_id = 99
+            
+            # Simulate Touch Down
+            await broadcast_to_clients({"type": "touch_down", "id": dummy_id, "x": norm_x, "y": norm_y})
+            
+            # Simulate short hold (100ms)
+            await asyncio.sleep(0.1)
+            
+            # Simulate Tap/Up
+            await broadcast_to_clients({"type": "tap_mt", "id": dummy_id, "x": norm_x, "y": norm_y})
+            
+    except asyncio.CancelledError:
+        print("Dummy Simulation: Stopped.")
+
+def find_ir_touch_device():
+    """Scans for a device with 'Touch' in name and ABS_MT_SLOT capability, excluding Mouse/Keyboard."""
+    print("Auto-detecting IR Touch Frame...")
+    devices = [InputDevice(path) for path in list_devices()]
+    for device in devices:
+        # print(f"Checking: {device.path} - {device.name}") # Verbose
+        if "Touch" in device.name and "Mouse" not in device.name and "Keyboard" not in device.name:
+            caps = device.capabilities()
+            if ecodes.EV_ABS in caps:
+                abs_caps = dict(caps[ecodes.EV_ABS])
+                if ecodes.ABS_MT_SLOT in abs_caps:
+                     print(f"Auto-detected suitable device: {device.name} at {device.path}")
+                     return device.path
+    print("Auto-detection failed: No suitable IR Touch device found (filtered Mouse/Keyboard).")
+    return None
+
+
+def find_ir_touch_device():
+    """Scans for a device with 'Touch' in name and ABS_MT_SLOT capability, excluding Mouse/Keyboard."""
+    print("Auto-detecting IR Touch Frame...")
+    devices = [InputDevice(path) for path in list_devices()]
+    for device in devices:
+        # print(f"Checking: {device.path} - {device.name}") # Verbose
+        if "Touch" in device.name and "Mouse" not in device.name and "Keyboard" not in device.name:
+            caps = device.capabilities()
+            if ecodes.EV_ABS in caps:
+                abs_caps = dict(caps[ecodes.EV_ABS])
+                if ecodes.ABS_MT_SLOT in abs_caps:
+                     print(f"Auto-detected suitable device: {device.name} at {device.path}")
+                     return device.path
+    print("Auto-detection failed: No suitable IR Touch device found (filtered Mouse/Keyboard).")
+    return None
+
+
 def get_ip_address(interface):
     try:
         # Use simple ip addr shell command to be robust
@@ -175,26 +234,56 @@ async def main(args):
     try:
         device = InputDevice(IR_FRAME_DEVICE_PATH)
         print(f"Successfully opened {device.name} ({device.phys or 'N/A'}). Listening...")
+        # ... (Validate capabilities)
         abs_capabilities = device.capabilities().get(ecodes.EV_ABS)
         if not abs_capabilities: 
-            print("CRITICAL: Device does not report EV_ABS capabilities.")
-            device.close()
-            dummy_mode = True
-        else:
-            has_mt_slot, has_mt_tracking_id = False, False
-            for code, absinfo in abs_capabilities:
-                if code == ecodes.ABS_MT_SLOT: has_mt_slot = True; max_slots_from_device = absinfo.max + 1; 
-                elif code == ecodes.ABS_MT_TRACKING_ID: has_mt_tracking_id = True;
-            if not has_mt_slot: 
-                print("CRITICAL: Device does not report ABS_MT_SLOT.")
-                device.close()
-                dummy_mode = True
-    except FileNotFoundError:
-        print(f"Device not found at {IR_FRAME_DEVICE_PATH}. Falling back to Dummy Mode.")
-        dummy_mode = True
+             raise Exception("Device missing EV_ABS")
+        
+        has_mt_slot = False
+        for code, absinfo in abs_capabilities:
+            if code == ecodes.ABS_MT_SLOT: has_mt_slot = True; max_slots_from_device = absinfo.max + 1; 
+        if not has_mt_slot:
+             raise Exception("Device missing ABS_MT_SLOT")
+
     except Exception as e:
-        print(f"Error opening IR Frame: {e}. Falling back to Dummy Mode.")
-        dummy_mode = True
+        print(f"Default path {IR_FRAME_DEVICE_PATH} failed or invalid: {e}")
+        # Auto-detect fallback
+        detected_path = find_ir_touch_device()
+        if detected_path:
+             try:
+                 device = InputDevice(detected_path)
+                 print(f"Successfully opened auto-detected device: {device.name} at {device.path}")
+                 # Re-validate capabilities for the new device
+                 abs_capabilities = device.capabilities().get(ecodes.EV_ABS)
+                 has_mt_slot = False
+                 for code, absinfo in abs_capabilities:
+                     if code == ecodes.ABS_MT_SLOT: has_mt_slot = True; max_slots_from_device = absinfo.max + 1; 
+             except Exception as ex:
+                 print(f"Failed to open auto-detected device: {ex}")
+                 dummy_mode = True
+        else:
+             print("Falling back to Dummy Mode.")
+             dummy_mode = True
+
+    except Exception as e:
+        print(f"Default path {IR_FRAME_DEVICE_PATH} failed or invalid: {e}")
+        # Auto-detect fallback
+        detected_path = find_ir_touch_device()
+        if detected_path:
+             try:
+                 device = InputDevice(detected_path)
+                 print(f"Successfully opened auto-detected device: {device.name} at {device.path}")
+                 # Re-validate capabilities for the new device
+                 abs_capabilities = device.capabilities().get(ecodes.EV_ABS)
+                 has_mt_slot = False
+                 for code, absinfo in abs_capabilities:
+                     if code == ecodes.ABS_MT_SLOT: has_mt_slot = True; max_slots_from_device = absinfo.max + 1; 
+             except Exception as ex:
+                 print(f"Failed to open auto-detected device: {ex}")
+                 dummy_mode = True
+        else:
+             print("Falling back to Dummy Mode.")
+             dummy_mode = True
 
     if dummy_mode:
         print("--- DUMMY MODE ACTIVE ---")
@@ -237,7 +326,9 @@ async def main(args):
         input_task = asyncio.create_task(read_ir_frame_input(device))
         tasks.append(input_task)
     elif dummy_mode:
-        print("Running in Dummy Mode. Input reader skipped.")
+        print("Running in Dummy Mode. Starting active simulation.")
+        input_task = asyncio.create_task(simulate_dummy_input())
+        tasks.append(input_task)
     else:
         print("WARNING: Touch processing not fully initialized due to missing capabilities.")
 
@@ -266,7 +357,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    print(f"Starting IRLMod Raspberry Pi Touch Server (Multitouch v0.2.8 - Optional SSL/Discord)...")
+    print(f"Starting IRLMod Raspberry Pi Touch Server (Multitouch v0.2.9 - Optional SSL/Discord)...")
     if args.ssl:
         print("SSL (WSS) mode enabled via command line.")
     else:
