@@ -1,4 +1,4 @@
-// IRLMod | gm-screen.js (v36.8 - GM Overlay State Persistence)
+// IRLMod | gm-screen.js (v36.9 - IR Calibration Settings Menu)
 
 const PLAYER_WINDOW_NAME = "FoundryIRLPlayerView";
 const IRLMOD_SOCKET_NAME = "module.irlmod";
@@ -7,6 +7,9 @@ const MODULE_ID = "irlmod";
 let playerWindowRef = null;
 let dedicatedPlayerUsername = "ScreenGoblin"; // Default, will be updated from settings
 let autoCalibratedThisSession = false;
+let irCalibrationActive = false;
+let irCalibrationStatusText = "";
+let irCalibrationMenuInstance = null;
 
 let gmOverlayDiv = null; 
 let gmOverlayHeader = null; 
@@ -210,6 +213,66 @@ function togglePlayerSplashImage() { /* Same as v36.7 */
     renderGMOverlayFromCanvasState(); // To update overlay border style
 }
 
+function toggleIRCalibration() {
+    irCalibrationActive = !irCalibrationActive;
+    sendCommandToPlayerView({ action: irCalibrationActive ? "startIRCalibration" : "cancelIRCalibration" });
+    ui.notifications.info(irCalibrationActive ? "IRLMod: IR Frame calibration started — follow the marker on the TV." : "IRLMod: IR Frame calibration cancelled.");
+    irCalibrationStatusText = irCalibrationActive ? game.i18n.localize("IRLMOD.CalibrationInProgress") : "";
+    irCalibrationMenuInstance?.render();
+}
+
+class IRCalibrationMenu extends FormApplication {
+    constructor(...args) {
+        super(...args);
+        irCalibrationMenuInstance = this;
+    }
+
+    static get defaultOptions() {
+        return foundry.utils.mergeObject(super.defaultOptions, {
+            id: "irlmod-ir-calibration-menu",
+            title: game.i18n.localize("IRLMOD.CalibrateIRFrameTitle"),
+            width: 420,
+            height: "auto",
+            closeOnSubmit: false,
+        });
+    }
+
+    getData() {
+        return {
+            hint: game.i18n.localize("IRLMOD.CalibrateIRFrameHint"),
+            status: irCalibrationStatusText,
+            buttonLabel: game.i18n.localize(irCalibrationActive ? "IRLMOD.CancelCalibration" : "IRLMOD.StartCalibration"),
+        };
+    }
+
+    async _renderInner(data) {
+        return $(`
+            <form class="irlmod-ir-calibration-menu">
+                <p>${data.hint}</p>
+                ${data.status ? `<p class="irlmod-calibration-status"><strong>${data.status}</strong></p>` : ""}
+                <footer class="sheet-footer flexrow">
+                    <button type="button" data-action="toggle"><i class="fas fa-crosshairs"></i> ${data.buttonLabel}</button>
+                </footer>
+            </form>
+        `);
+    }
+
+    activateListeners(html) {
+        super.activateListeners(html);
+        html.find('[data-action="toggle"]').on('click', (ev) => {
+            ev.preventDefault();
+            toggleIRCalibration();
+        });
+    }
+
+    async _updateObject() {}
+
+    async close(options) {
+        if (irCalibrationMenuInstance === this) irCalibrationMenuInstance = null;
+        return super.close(options);
+    }
+}
+
 async function ensureDedicatedUserExists() { /* Same as v36.7 */
     if (!game.user.isGM) return null; 
     dedicatedPlayerUsername = game.settings.get(MODULE_ID, "dedicatedPlayerUsername");
@@ -282,6 +345,14 @@ Hooks.once('init', () => {
     game.settings.register(MODULE_ID, "piServerIP", { name: "irlmod.settingPiServerIP.name", hint: "irlmod.settingPiServerIP.hint", scope: "world", config: true, type: String, default: "192.168.1.100", onChange: value => { piServerIP = value; } });
     game.settings.register(MODULE_ID, "piServerPort", { name: "irlmod.settingPiServerPort.name", hint: "irlmod.settingPiServerPort.hint", scope: "world", config: true, type: Number, default: 8765, onChange: value => { piServerPort = value; } });
     game.settings.register(MODULE_ID, "playerPerformanceMode", { name: "irlmod.settingPlayerPerformanceMode.name", hint: "irlmod.settingPlayerPerformanceMode.hint", scope: "world", config: true, type: String, default: "high", choices: { "low": "IRLMOD.performanceModes.low", "medium": "IRLMOD.performanceModes.medium", "high": "IRLMOD.performanceModes.high", "auto": "IRLMOD.performanceModes.auto"} });
+    game.settings.registerMenu(MODULE_ID, "irCalibrationMenu", {
+        name: "IRLMOD.CalibrateIRFrameTitle",
+        label: "IRLMOD.CalibrateIRFrameTitle",
+        hint: "IRLMOD.CalibrateIRFrameHint",
+        icon: "fas fa-crosshairs",
+        type: IRCalibrationMenu,
+        restricted: true,
+    });
     
     dedicatedPlayerUsername = game.settings.get(MODULE_ID, "dedicatedPlayerUsername"); 
     splashImageURL = game.settings.get(MODULE_ID, "splashImageURL"); 
@@ -320,6 +391,28 @@ Hooks.once('ready', () => {
         }
         // Note: The overlay won't render yet even if `gmOverlayCanvasState.visible` is true.
         // It will render when canvasReady triggers, or when toggleGMOverlay is first clicked.
+
+        game.socket.on(IRLMOD_SOCKET_NAME, (data) => {
+            switch (data.action) {
+                case "irCalibrationStep":
+                    irCalibrationStatusText = game.i18n.format("IRLMOD.CalibrationStepStatus", { index: data.index, total: data.total, step: data.step });
+                    ui.notifications.info(`IRLMod: Calibration step ${data.index}/${data.total} (${data.step})`);
+                    irCalibrationMenuInstance?.render();
+                    break;
+                case "irCalibrationComplete":
+                    irCalibrationActive = false;
+                    irCalibrationStatusText = "";
+                    ui.notifications.info("IRLMod: IR Frame calibration complete!");
+                    irCalibrationMenuInstance?.render();
+                    break;
+                case "irCalibrationCancelled":
+                    irCalibrationActive = false;
+                    irCalibrationStatusText = "";
+                    ui.notifications.warn(`IRLMod: IR Frame calibration cancelled (${data.reason}).`);
+                    irCalibrationMenuInstance?.render();
+                    break;
+            }
+        });
     }
 });
 
@@ -356,35 +449,35 @@ Hooks.on("canvasReady", () => {
 
 Hooks.on("renderSceneControls", (sceneControlsApp, htmlElement, data) => { /* Same as v36.7 */
     const jqSceneControlsRoot = $(htmlElement);
-    const openButtonDataControl = "irlmod-open-player-screen"; 
+    const openButtonDataControl = "irlmod-open-player-screen";
     const toggleOverlayButtonDataControl = "irlmod-toggle-overlay";
-    const toggleSplashButtonDataControl = "irlmod-toggle-splash"; 
+    const toggleSplashButtonDataControl = "irlmod-toggle-splash";
 
     const openTitle = game.i18n.localize("IRLMOD.OpenPlayerViewTitle");
     const toggleOverlayTitle = game.i18n.localize("IRLMOD.ToggleOverlayTitle");
-    const toggleSplashTitle = game.i18n.localize("IRLMOD.ToggleSplashImageTitle"); 
+    const toggleSplashTitle = game.i18n.localize("IRLMOD.ToggleSplashImageTitle");
 
     const openButtonHtml = $(`<li class="scene-control irlmod-custom-control" data-control="${openButtonDataControl}"><button type="button" class="control ui-control layer icon" title="${openTitle}" aria-label="${openTitle}"><i class="fas fa-tv"></i></button></li>`);
     const toggleOverlayButtonHtml = $(`<li class="scene-control irlmod-custom-control" data-control="${toggleOverlayButtonDataControl}"><button type="button" class="control ui-control layer icon" title="${toggleOverlayTitle}" aria-label="${toggleOverlayTitle}"><i class="far fa-square"></i></button></li>`);
     const toggleSplashButtonHtml = $(`<li class="scene-control irlmod-custom-control" data-control="${toggleSplashButtonDataControl}"><button type="button" class="control ui-control layer icon" title="${toggleSplashTitle}" aria-label="${toggleSplashTitle}"><i class="fas fa-image"></i></button></li>`);
-    
-    const targetMenu = jqSceneControlsRoot.find('menu#scene-controls-layers').first(); 
+
+    const targetMenu = jqSceneControlsRoot.find('menu#scene-controls-layers').first();
     if (targetMenu.length) {
         if (targetMenu.find(`li[data-control="${openButtonDataControl}"]`).length === 0) targetMenu.append(openButtonHtml);
         if (targetMenu.find(`li[data-control="${toggleOverlayButtonDataControl}"]`).length === 0) targetMenu.append(toggleOverlayButtonHtml);
-        if (targetMenu.find(`li[data-control="${toggleSplashButtonDataControl}"]`).length === 0) targetMenu.append(toggleSplashButtonHtml); 
-    } else { 
+        if (targetMenu.find(`li[data-control="${toggleSplashButtonDataControl}"]`).length === 0) targetMenu.append(toggleSplashButtonHtml);
+    } else {
         const controlsList = jqSceneControlsRoot.find('ol.main-controls').first();
         if(controlsList.length) {
              if (controlsList.find(`li[data-control="${openButtonDataControl}"]`).length === 0) controlsList.append(openButtonHtml);
              if (controlsList.find(`li[data-control="${toggleOverlayButtonDataControl}"]`).length === 0) controlsList.append(toggleOverlayButtonHtml);
-             if (controlsList.find(`li[data-control="${toggleSplashButtonDataControl}"]`).length === 0) controlsList.append(toggleSplashButtonHtml); 
+             if (controlsList.find(`li[data-control="${toggleSplashButtonDataControl}"]`).length === 0) controlsList.append(toggleSplashButtonHtml);
         } else { console.error("IRLMod | Could not find any suitable menu to add control buttons."); return; }
     }
-    
+
     jqSceneControlsRoot.find(`li[data-control="${openButtonDataControl}"] button`).off('click.irlmodOpen').on('click.irlmodOpen', launchOrFocusPlayerView);
     jqSceneControlsRoot.find(`li[data-control="${toggleOverlayButtonDataControl}"] button`).off('click.irlmodToggleOverlay').on('click.irlmodToggleOverlay', toggleGMOverlay);
-    jqSceneControlsRoot.find(`li[data-control="${toggleSplashButtonDataControl}"] button`).off('click.irlmodToggleSplash').on('click.irlmodToggleSplash', togglePlayerSplashImage); 
+    jqSceneControlsRoot.find(`li[data-control="${toggleSplashButtonDataControl}"] button`).off('click.irlmodToggleSplash').on('click.irlmodToggleSplash', togglePlayerSplashImage);
 });
 
-console.log("IRLMod | GM Screen Script Loaded (v36.8 - GM Overlay State Persistence)");
+console.log("IRLMod | GM Screen Script Loaded (v36.9 - IR Calibration Settings Menu)");

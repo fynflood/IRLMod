@@ -1,4 +1,4 @@
-// IRLMod | player-client.js (v2.60.0 - Continuous Drag Position Sync)
+// IRLMod | player-client.js (v2.62.0 - IR Calibration Overlay + Idle Snap-to-Grid)
 
 // ... (Constants and most functions up to handlePiTouchMove are the same as v2.59.8) ...
 const IRLMOD_SOCKET_NAME = "module.irlmod";
@@ -14,6 +14,9 @@ let forceHideInterval = null;
 
 let piTouches = {};
 let lastPiFocusedToken = null;
+let calibrationOverlayDiv = null;
+let calibrationMarkerDiv = null;
+let calibrationTextDiv = null;
 
 const PI_TAP_MAX_DURATION_MS = 350;
 const PI_TAP_MAX_DIST_SQ_FALLBACK = (50) ** 2;
@@ -23,6 +26,7 @@ const PI_MOVE_JITTER_THRESHOLD_PX = 2;
 let visionRefreshThrottler = null;
 const VISION_REFRESH_THROTTLE_MS = 100;
 const POSITION_COMMIT_THROTTLE_MS = 150; // ~6-7 DB commits/sec while dragging
+const IDLE_SNAP_DELAY_MS = 1200; // snap to grid if the mini sits still this long mid-drag
 
 
 function addBlockedListener(target, type, listener, options) { /* Same */ const existing = irlPlayerInteractionBlockers.find(b => b.target === target && b.type === type && b.listener === listener); if (existing) return; target.addEventListener(type, listener, options); irlPlayerInteractionBlockers.push({ target, type, listener, options }); }
@@ -55,9 +59,38 @@ function connectToPiServer() {
         if (canvas?.tokens?.controlled?.length) canvas.tokens.releaseAll();
     };
 }
-function handlePiMessage(event) { /* Same */ if (!canvas?.ready || !game.user || game.user.name !== DEDICATED_PLAYER_USER_NAME || !canvas.stage?.worldTransform) { return; } try { const message = JSON.parse(event.data); const touch_id = message.id; if (touch_id === undefined || touch_id === null) { return; } const canvasView = canvas.app.view; if (!canvasView) { return; } const screenX = message.x * canvasView.width; const screenY = message.y * canvasView.height; const screenPoint = new PIXI.Point(screenX, screenY); const canvasCoords = canvas.stage.worldTransform.applyInverse(screenPoint); const currentTime = Date.now(); switch (message.type) { case "touch_down": handlePiTouchDown(touch_id, canvasCoords, currentTime); break; case "touch_move": handlePiTouchMove(touch_id, canvasCoords, currentTime); break; case "touch_up": handlePiTouchUp(touch_id, canvasCoords, currentTime); break; case "tap_mt": handlePiTapMT(touch_id, canvasCoords, currentTime); break; default: console.warn("IRLMod | Player Client: Unknown Pi message type:", message.type); } } catch (e) { console.error("IRLMod | Player Client: Error processing Pi message:", e, "Raw data:", event.data); } }
+function sendToPiServer(obj) {
+    if (piWebSocket?.readyState === WebSocket.OPEN) {
+        piWebSocket.send(JSON.stringify(obj));
+    } else {
+        console.warn("IRLMod | Player Client: Cannot send to Pi server, socket not open.", obj);
+    }
+}
+function handlePiMessage(event) {
+    if (!game.user || game.user.name !== DEDICATED_PLAYER_USER_NAME) { return; }
+    try {
+        const message = JSON.parse(event.data);
+        if (message.type === "calibration_step") {
+            showCalibrationStep(message.step, message.index, message.total, message.target);
+            game.socket?.emit(IRLMOD_SOCKET_NAME, { action: "irCalibrationStep", step: message.step, index: message.index, total: message.total });
+            return;
+        }
+        if (message.type === "calibration_complete") {
+            hideCalibrationOverlay();
+            game.socket?.emit(IRLMOD_SOCKET_NAME, { action: "irCalibrationComplete", calibration: message.calibration });
+            return;
+        }
+        if (message.type === "calibration_cancelled") {
+            hideCalibrationOverlay();
+            game.socket?.emit(IRLMOD_SOCKET_NAME, { action: "irCalibrationCancelled", reason: message.reason });
+            return;
+        }
+        if (!canvas?.ready || !canvas.stage?.worldTransform) { return; }
+        const touch_id = message.id; if (touch_id === undefined || touch_id === null) { return; } const canvasView = canvas.app.view; if (!canvasView) { return; } const screenX = message.x * canvasView.width; const screenY = message.y * canvasView.height; const screenPoint = new PIXI.Point(screenX, screenY); const canvasCoords = canvas.stage.worldTransform.applyInverse(screenPoint); const currentTime = Date.now(); switch (message.type) { case "touch_down": handlePiTouchDown(touch_id, canvasCoords, currentTime); break; case "touch_move": handlePiTouchMove(touch_id, canvasCoords, currentTime); break; case "touch_up": handlePiTouchUp(touch_id, canvasCoords, currentTime); break; case "tap_mt": handlePiTapMT(touch_id, canvasCoords, currentTime); break; default: console.warn("IRLMod | Player Client: Unknown Pi message type:", message.type); }
+    } catch (e) { console.error("IRLMod | Player Client: Error processing Pi message:", e, "Raw data:", event.data); }
+}
 function getTokensAtPoint(point) { /* Same */ if (!canvas.tokens?.placeables) return []; const tokens = []; for (const token of canvas.tokens.placeables) { const tokenDoc = token.document; if (token.visible && token.hitArea && token.hitArea.contains(point.x - tokenDoc.x, point.y - tokenDoc.y)) { tokens.push(token); } } return tokens.sort((a, b) => b.document.sort - a.document.sort); }
-function handlePiTouchDown(touch_id, canvasCoords, time) { /* Same as v2.59.8 */ const debounceDistSq = (canvas?.grid?.size ? (canvas.grid.size * 0.5) ** 2 : PI_MULTI_TOUCH_DIST_SQ_FALLBACK); for (const otherId in piTouches) { if (piTouches[otherId]) { const otherTouch = piTouches[otherId]; const timeDiff = time - otherTouch.startTime; const distSq = (canvasCoords.x - otherTouch.startCanvasCoords.x) ** 2 + (canvasCoords.y - otherTouch.startCanvasCoords.y) ** 2; if (timeDiff < PI_MULTI_TOUCH_DEBOUNCE_MS && distSq < debounceDistSq) { return; } } } let tokenUnderTouch = null; const tokens = getTokensAtPoint(canvasCoords); if (tokens.length > 0) { for (const t of tokens) { let isAssociatedWithOtherActiveTouch = false; for (const otherId in piTouches) { if (piTouches[otherId].selectedToken === t && piTouches[otherId].isDraggingConfirmed) { isAssociatedWithOtherActiveTouch = true; break; } } if (!isAssociatedWithOtherActiveTouch && (t.isOwner || game.user.isGM || t.document.testUserPermission(game.user, "LIMITED") || t.document.testUserPermission(game.user, "OBSERVER"))) { tokenUnderTouch = t; break; } } } piTouches[touch_id] = { canvasCoords: { ...canvasCoords }, startCanvasCoords: { ...canvasCoords }, startTime: time, selectedToken: tokenUnderTouch, isDraggingConfirmed: false, dragOffset: { x: 0, y: 0 }, positionCommitTimer: null }; if (tokenUnderTouch) { const touchData = piTouches[touch_id]; const tokenCenterX = tokenUnderTouch.x + tokenUnderTouch.w / 2; const tokenCenterY = tokenUnderTouch.y + tokenUnderTouch.h / 2; touchData.dragOffset.x = canvasCoords.x - tokenCenterX; touchData.dragOffset.y = canvasCoords.y - tokenCenterY; } }
+function handlePiTouchDown(touch_id, canvasCoords, time) { /* Same as v2.59.8 */ const debounceDistSq = (canvas?.grid?.size ? (canvas.grid.size * 0.5) ** 2 : PI_MULTI_TOUCH_DIST_SQ_FALLBACK); for (const otherId in piTouches) { if (piTouches[otherId]) { const otherTouch = piTouches[otherId]; const timeDiff = time - otherTouch.startTime; const distSq = (canvasCoords.x - otherTouch.startCanvasCoords.x) ** 2 + (canvasCoords.y - otherTouch.startCanvasCoords.y) ** 2; if (timeDiff < PI_MULTI_TOUCH_DEBOUNCE_MS && distSq < debounceDistSq) { return; } } } let tokenUnderTouch = null; const tokens = getTokensAtPoint(canvasCoords); if (tokens.length > 0) { for (const t of tokens) { let isAssociatedWithOtherActiveTouch = false; for (const otherId in piTouches) { if (piTouches[otherId].selectedToken === t && piTouches[otherId].isDraggingConfirmed) { isAssociatedWithOtherActiveTouch = true; break; } } if (!isAssociatedWithOtherActiveTouch && (t.isOwner || game.user.isGM || t.document.testUserPermission(game.user, "LIMITED") || t.document.testUserPermission(game.user, "OBSERVER"))) { tokenUnderTouch = t; break; } } } piTouches[touch_id] = { canvasCoords: { ...canvasCoords }, startCanvasCoords: { ...canvasCoords }, startTime: time, selectedToken: tokenUnderTouch, isDraggingConfirmed: false, dragOffset: { x: 0, y: 0 }, positionCommitTimer: null, idleSnapTimer: null }; if (tokenUnderTouch) { const touchData = piTouches[touch_id]; const tokenCenterX = tokenUnderTouch.x + tokenUnderTouch.w / 2; const tokenCenterY = tokenUnderTouch.y + tokenUnderTouch.h / 2; touchData.dragOffset.x = canvasCoords.x - tokenCenterX; touchData.dragOffset.y = canvasCoords.y - tokenCenterY; } }
 
 function handlePiTouchMove(touch_id, canvasCoords, time) {
     const touchData = piTouches[touch_id];
@@ -142,6 +175,18 @@ function handlePiTouchMove(touch_id, canvasCoords, time) {
                     ).catch(e => console.error("IRLMod | Pi: Error committing in-drag position", e));
                 }, POSITION_COMMIT_THROTTLE_MS);
             }
+
+            if (touchData.idleSnapTimer) { clearTimeout(touchData.idleSnapTimer); }
+            touchData.idleSnapTimer = setTimeout(() => {
+                touchData.idleSnapTimer = null;
+                const tok = touchData.selectedToken;
+                if (!tok || !canvas.tokens.get(tok.id)) return;
+                const centerX = tok.document.x + tok.w / 2; const centerY = tok.document.y + tok.h / 2;
+                const snappedCenterPoint = canvas.grid.getSnappedPoint({ x: centerX, y: centerY }, { mode: CONST.GRID_SNAPPING_MODES.CENTER });
+                const snapX = snappedCenterPoint.x - tok.w / 2; const snapY = snappedCenterPoint.y - tok.h / 2;
+                if (snapX === tok.document.x && snapY === tok.document.y) return;
+                tok.document.update({ x: snapX, y: snapY }).catch(e => console.error("IRLMod | Pi: Error on idle snap-to-grid", e));
+            }, IDLE_SNAP_DELAY_MS);
         } catch (e) { console.error(`IRLMod | Pi: Error in touch_move for ID ${touch_id}`, e); delete piTouches[touch_id]; }
     }
 }
@@ -151,6 +196,7 @@ async function handlePiTouchUp(touch_id, canvasCoords, time) {
 
     const touchData = piTouches[touch_id]; if (!touchData) return;
     if (touchData.positionCommitTimer) { clearTimeout(touchData.positionCommitTimer); touchData.positionCommitTimer = null; }
+    if (touchData.idleSnapTimer) { clearTimeout(touchData.idleSnapTimer); touchData.idleSnapTimer = null; }
     if (touchData.selectedToken && !canvas.tokens.get(touchData.selectedToken.id)) { delete piTouches[touch_id]; return; }
 
     if (touchData.isDraggingConfirmed && touchData.selectedToken) {
@@ -159,12 +205,14 @@ async function handlePiTouchUp(touch_id, canvasCoords, time) {
         const snappedCenterPoint = canvas.grid.getSnappedPoint({ x: finalCenterX, y: finalCenterY }, { mode: CONST.GRID_SNAPPING_MODES.CENTER });
         const snapX = snappedCenterPoint.x - (touchData.selectedToken.w / 2); const snapY = snappedCenterPoint.y - (touchData.selectedToken.h / 2);
         try {
-            touchData.selectedToken.document.x = snapX; touchData.selectedToken.document.y = snapY;
-            touchData.selectedToken.renderFlags.set({ refreshPosition: true });
-            if (lastPiFocusedToken === touchData.selectedToken && canvas.perception?.update) {
-                canvas.perception.update({ refreshVision: true }, { forceUpdateFog: true }); // Corrected
-            }
+            // Let Foundry animate the snap from the continuous drag position to the
+            // grid-aligned spot, instead of teleporting there instantly (which felt
+            // like a jarring jump to an adjacent square when the drop point was near
+            // a grid boundary).
             await touchData.selectedToken.document.update({ x: snapX, y: snapY });
+            if (lastPiFocusedToken === touchData.selectedToken && canvas.perception?.update) {
+                canvas.perception.update({ refreshVision: true }, { forceUpdateFog: true });
+            }
         } catch (e) { console.error(`IRLMod | Pi: Error on final update for touch ${touch_id}`, e); }
     } else {
         const duration = time - touchData.startTime; const distSq = (canvasCoords.x - touchData.startCanvasCoords.x) ** 2 + (canvasCoords.y - touchData.startCanvasCoords.y) ** 2;
@@ -240,12 +288,45 @@ function disablePlayerCanvasInteractions() { /* Same */ if (!canvas?.ready || !c
 function restorePlayerCanvasInteractions() { /* Same */ removeAllIRLModBlockedListeners(); if (canvas && canvas.mouseInteractionManager) { if (canvas.mouseInteractionManager._irlmod_orig_handleDragPan) { canvas.mouseInteractionManager._handleDragPan = canvas.mouseInteractionManager._irlmod_orig_handleDragPan; delete canvas.mouseInteractionManager._irlmod_orig_handleDragPan; } if (canvas.mouseInteractionManager._irlmod_orig_handleWheel) { canvas.mouseInteractionManager._handleWheel = canvas.mouseInteractionManager._irlmod_orig_handleWheel; delete canvas.mouseInteractionManager._irlmod_orig_handleWheel; } } }
 function setupPlayerViewUI() { /* Same */ document.body.classList.add('irlmod-player-view-active'); if (document.body.classList.contains('irlmod-player-view-active')) { console.log(`IRLMod: Player View UI Initialized for ${DEDICATED_PLAYER_USER_NAME}.`); startPersistentForceHide(); ensureSplashScreenDiv(); connectToPiServer(); if (canvas && canvas.ready) { disablePlayerCanvasInteractions(); } else { Hooks.once("canvasReady", disablePlayerCanvasInteractions); } } else { console.error(`IRLMod | Player Client: FAILED to add 'irlmod-player-view-active' class to body.`); } }
 function processSetViewFromRectangle(rectData, splashShouldBeActive, splashUrl, retryAttempt = 0) { /* Same */ const canvasElement = canvas?.app?.view; let wasCanvasAlreadyHidden = false; if (canvasElement) { wasCanvasAlreadyHidden = (getComputedStyle(canvasElement).display === 'none'); } if (wasCanvasAlreadyHidden && !splashShouldBeActive && canvasElement) { canvasElement.style.display = 'block'; } if (!canvas?.ready || !canvas.stage || !canvas.app?.view) { if (retryAttempt < 10) { setTimeout(() => processSetViewFromRectangle(rectData, splashShouldBeActive, splashUrl, retryAttempt + 1), 500); } else { console.error("IRLMod | Player Client: Canvas not ready for setViewFromRectangle."); } return; } if (!rectData || typeof rectData.x !== 'number' || typeof rectData.y !== 'number' || typeof rectData.width !== 'number' || typeof rectData.height !== 'number' || rectData.width <= 0 || rectData.height <= 0) { console.error("IRLMod | Player Client: Invalid rectData for setView.", rectData); return; } const viewWidth = canvas.app.view.width; const effectiveViewWidth = (viewWidth > 0) ? viewWidth : (window.innerWidth || 1920); if (effectiveViewWidth <= 0) { if (retryAttempt < 5) { setTimeout(() => processSetViewFromRectangle(rectData, splashShouldBeActive, splashUrl, retryAttempt + 1), 300); } return; } const targetX = rectData.x + rectData.width / 2; const targetY = rectData.y + rectData.height / 2; const targetScale = effectiveViewWidth / rectData.width; const finalScale = Math.clamp(targetScale, canvas.scene?.minScale ?? CONFIG.Canvas.minZoom ?? 0.1, canvas.scene?.maxScale ?? CONFIG.Canvas.maxZoom ?? 3); canvas.animatePan({ x: targetX, y: targetY, scale: finalScale, duration: 300 }).then(() => { const splashDiv = ensureSplashScreenDiv(); if (splashShouldBeActive && splashUrl) { splashDiv.style.backgroundImage = `url("${splashUrl}")`; splashDiv.style.display = 'block'; if (canvasElement) canvasElement.style.display = 'none'; } else { splashDiv.style.display = 'none'; if (canvasElement) canvasElement.style.display = 'block'; } }).catch(err => { console.error("IRLMod | Player Client: Error during animatePan or its callback:", err); if (!splashShouldBeActive && canvasElement) { canvasElement.style.display = 'block'; } }); }
-function listenForGMCommands() { /* Same */ if (!game.socket) { return; } game.socket.on(IRLMOD_SOCKET_NAME, (data) => { if (game.user?.name !== DEDICATED_PLAYER_USER_NAME) return; const canvasViewElement = canvas?.app?.view; switch (data.action) { case "setViewFromRectangle": if (data.rect) { processSetViewFromRectangle(data.rect, data.splashActive, data.splashUrl); } break; case "setView": if (data.view && canvas?.ready) { const splashDiv = ensureSplashScreenDiv(); splashDiv.style.display = 'none'; if (canvasViewElement) canvasViewElement.style.display = 'block'; canvas.animatePan({ x: data.view.x, y: data.view.y, scale: data.view.scale, duration: 300 }); } break; case "showSplashImage": if (data.url) { const div = ensureSplashScreenDiv(); div.style.backgroundImage = `url("${data.url}")`; div.style.display = 'block'; if (canvasViewElement) canvasViewElement.style.display = 'none'; } break; case "hideSplashImage": { const div = ensureSplashScreenDiv(); div.style.display = 'none'; div.style.backgroundImage = ''; if (canvasViewElement) canvasViewElement.style.display = 'block'; } break; default: console.warn("IRLMod | Player Client: Received unknown GM command:", data); } }); }
+function listenForGMCommands() { /* Same */ if (!game.socket) { return; } game.socket.on(IRLMOD_SOCKET_NAME, (data) => { if (game.user?.name !== DEDICATED_PLAYER_USER_NAME) return; const canvasViewElement = canvas?.app?.view; switch (data.action) { case "setViewFromRectangle": if (data.rect) { processSetViewFromRectangle(data.rect, data.splashActive, data.splashUrl); } break; case "setView": if (data.view && canvas?.ready) { const splashDiv = ensureSplashScreenDiv(); splashDiv.style.display = 'none'; if (canvasViewElement) canvasViewElement.style.display = 'block'; canvas.animatePan({ x: data.view.x, y: data.view.y, scale: data.view.scale, duration: 300 }); } break; case "showSplashImage": if (data.url) { const div = ensureSplashScreenDiv(); div.style.backgroundImage = `url("${data.url}")`; div.style.display = 'block'; if (canvasViewElement) canvasViewElement.style.display = 'none'; } break; case "hideSplashImage": { const div = ensureSplashScreenDiv(); div.style.display = 'none'; div.style.backgroundImage = ''; if (canvasViewElement) canvasViewElement.style.display = 'block'; } break; case "startIRCalibration": sendToPiServer({ action: "start_calibration" }); break; case "cancelIRCalibration": sendToPiServer({ action: "cancel_calibration" }); break; default: console.warn("IRLMod | Player Client: Received unknown GM command:", data); } }); }
 function ensureSplashScreenDiv() { /* Same */ if (!playerSplashDiv) { playerSplashDiv = document.createElement('div'); playerSplashDiv.id = 'irlmod-player-splash-screen'; playerSplashDiv.style.display = 'none'; document.body.appendChild(playerSplashDiv); } return playerSplashDiv; }
+
+const CALIBRATION_STEP_LABELS = {
+    center: "Center",
+    upper_right: "Upper Right",
+    lower_right: "Lower Right",
+    lower_left: "Lower Left",
+    upper_left: "Upper Left",
+    upper_right_confirm: "Upper Right (confirm)",
+};
+function ensureCalibrationOverlayDiv() {
+    if (!calibrationOverlayDiv) {
+        calibrationOverlayDiv = document.createElement('div');
+        calibrationOverlayDiv.id = 'irlmod-calibration-overlay';
+        calibrationMarkerDiv = document.createElement('div');
+        calibrationMarkerDiv.id = 'irlmod-calibration-marker';
+        calibrationTextDiv = document.createElement('div');
+        calibrationTextDiv.id = 'irlmod-calibration-text';
+        calibrationOverlayDiv.appendChild(calibrationMarkerDiv);
+        calibrationOverlayDiv.appendChild(calibrationTextDiv);
+        document.body.appendChild(calibrationOverlayDiv);
+    }
+    return calibrationOverlayDiv;
+}
+function showCalibrationStep(step, index, total, target) {
+    ensureCalibrationOverlayDiv();
+    calibrationMarkerDiv.style.left = `${target.x * 100}%`;
+    calibrationMarkerDiv.style.top = `${target.y * 100}%`;
+    calibrationTextDiv.textContent = `Place the mini here — ${CALIBRATION_STEP_LABELS[step] ?? step} (${index}/${total})`;
+    calibrationOverlayDiv.style.display = 'block';
+}
+function hideCalibrationOverlay() {
+    if (calibrationOverlayDiv) calibrationOverlayDiv.style.display = 'none';
+}
 Hooks.once('init', () => { /* Same as v2.59.5 */ game.settings.register(MODULE_ID, "dedicatedPlayerUsername", { name: "irlmod.settingDedicatedPlayerUsernameName", hint: "irlmod.settingDedicatedPlayerUsernameHint", scope: "world", config: true, type: String, default: "ScreenGoblin", onChange: val => DEDICATED_PLAYER_USER_NAME = val }); game.settings.register(MODULE_ID, "piServerIP", { name: "irlmod.settingPiServerIP.name", hint: "irlmod.settingPiServerIP.hint", scope: "world", config: true, type: String, default: "192.168.1.100", onChange: val => piServerIP = val }); game.settings.register(MODULE_ID, "piServerPort", { name: "irlmod.settingPiServerPort.name", hint: "irlmod.settingPiServerPort.hint", scope: "world", config: true, type: Number, default: 8765, onChange: val => piServerPort = val }); game.settings.register(MODULE_ID, "playerPerformanceMode", { name: "irlmod.settingPlayerPerformanceMode.name", hint: "irlmod.settingPlayerPerformanceMode.hint", scope: "world", config: true, type: String, default: "high", choices: { "low": "IRLMOD.performanceModes.low", "medium": "IRLMOD.performanceModes.medium", "high": "IRLMOD.performanceModes.high", "maximum": "IRLMOD.performanceModes.maximum", "auto": "IRLMOD.performanceModes.auto" } }); game.settings.register(MODULE_ID, "splashImageURL", { name: "irlmod.settingSplashImageURL.name", hint: "irlmod.settingSplashImageURL.hint", scope: "world", config: true, type: String, default: "", filePicker: "imagevideo" }); game.settings.register(MODULE_ID, "tvPhysicalWidthInches", { name: "IRLMOD.settings.tvPhysicalWidth.name", hint: "IRLMOD.settings.tvPhysicalWidth.hint", scope: "world", config: true, type: Number, default: 43 }); game.settings.register(MODULE_ID, "tvResolutionWidthPixels", { name: "IRLMOD.settings.tvResolutionWidth.name", hint: "IRLMOD.settings.tvResolutionWidth.hint", scope: "world", config: true, type: Number, default: 3840 }); game.settings.register(MODULE_ID, "tvDesiredGridInches", { name: "IRLMOD.settings.tvDesiredGridInches.name", hint: "IRLMOD.settings.tvDesiredGridInches.hint", scope: "world", config: true, type: Number, default: 1.0, range: { min: 0.1, max: 10, step: 0.1 } }); try { DEDICATED_PLAYER_USER_NAME = game.settings.get(MODULE_ID, "dedicatedPlayerUsername"); piServerIP = game.settings.get(MODULE_ID, "piServerIP"); piServerPort = game.settings.get(MODULE_ID, "piServerPort"); } catch (e) { /* empty */ } });
 Hooks.once('ready', () => { /* Same as v2.59.5 */ try { const settingUsername = game.settings.get(MODULE_ID, "dedicatedPlayerUsername"); if (settingUsername) DEDICATED_PLAYER_USER_NAME = settingUsername; piServerIP = game.settings.get(MODULE_ID, "piServerIP") || "192.168.1.100"; piServerPort = game.settings.get(MODULE_ID, "piServerPort") || 8765; } catch (e) { console.error(`IRLMod | Player Client (ready): Error fetching critical settings. Using defaults/previous.`, e); } if (game.user && game.user.name === DEDICATED_PLAYER_USER_NAME) { applyPlayerPerformanceMode().then(() => { setTimeout(() => { setupPlayerViewUI(); listenForGMCommands(); }, 250); }); } else { if (document.body.classList.contains('irlmod-player-view-active')) { document.body.classList.remove('irlmod-player-view-active'); restorePlayerCanvasInteractions(); stopPersistentForceHide(); } } });
 function reapplyPlayerViewRestrictions() { /* Same as v2.59.5 */ if (game.user && game.user.name === DEDICATED_PLAYER_USER_NAME) { if (!document.body.classList.contains('irlmod-player-view-active')) document.body.classList.add('irlmod-player-view-active'); startPersistentForceHide(); if (canvas?.ready) { disablePlayerCanvasInteractions(); } } }
 Hooks.on("canvasInit", reapplyPlayerViewRestrictions); Hooks.on("canvasReady", reapplyPlayerViewRestrictions);
 Hooks.on("userInactive", (userId, inactive) => { /* Same as v2.59.5 */ if (game.user?.id === userId && inactive && game.user.name === DEDICATED_PLAYER_USER_NAME) { restorePlayerCanvasInteractions(); document.body.classList.remove('irlmod-player-view-active'); stopPersistentForceHide(); if (piWebSocket?.readyState === WebSocket.OPEN) piWebSocket.close(); piTouches = {}; lastPiFocusedToken = null; if (canvas?.tokens?.controlled?.length) canvas.tokens.releaseAll(); } });
 
-console.log("IRLMod | Player Client Script Loaded (v2.60.0 - Continuous Drag Position Sync)");
+console.log("IRLMod | Player Client Script Loaded (v2.62.0 - IR Calibration Overlay + Idle Snap-to-Grid)");
