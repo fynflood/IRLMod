@@ -1,4 +1,4 @@
-// IRLMod | player-client.js (v2.59.9 - Correct Perception Update Options)
+// IRLMod | player-client.js (v2.60.0 - Continuous Drag Position Sync)
 
 // ... (Constants and most functions up to handlePiTouchMove are the same as v2.59.8) ...
 const IRLMOD_SOCKET_NAME = "module.irlmod";
@@ -22,6 +22,7 @@ const PI_MULTI_TOUCH_DIST_SQ_FALLBACK = (50 * 0.5) ** 2;
 const PI_MOVE_JITTER_THRESHOLD_PX = 2;
 let visionRefreshThrottler = null;
 const VISION_REFRESH_THROTTLE_MS = 100;
+const POSITION_COMMIT_THROTTLE_MS = 150; // ~6-7 DB commits/sec while dragging
 
 
 function addBlockedListener(target, type, listener, options) { /* Same */ const existing = irlPlayerInteractionBlockers.find(b => b.target === target && b.type === type && b.listener === listener); if (existing) return; target.addEventListener(type, listener, options); irlPlayerInteractionBlockers.push({ target, type, listener, options }); }
@@ -56,7 +57,7 @@ function connectToPiServer() {
 }
 function handlePiMessage(event) { /* Same */ if (!canvas?.ready || !game.user || game.user.name !== DEDICATED_PLAYER_USER_NAME || !canvas.stage?.worldTransform) { return; } try { const message = JSON.parse(event.data); const touch_id = message.id; if (touch_id === undefined || touch_id === null) { return; } const canvasView = canvas.app.view; if (!canvasView) { return; } const screenX = message.x * canvasView.width; const screenY = message.y * canvasView.height; const screenPoint = new PIXI.Point(screenX, screenY); const canvasCoords = canvas.stage.worldTransform.applyInverse(screenPoint); const currentTime = Date.now(); switch (message.type) { case "touch_down": handlePiTouchDown(touch_id, canvasCoords, currentTime); break; case "touch_move": handlePiTouchMove(touch_id, canvasCoords, currentTime); break; case "touch_up": handlePiTouchUp(touch_id, canvasCoords, currentTime); break; case "tap_mt": handlePiTapMT(touch_id, canvasCoords, currentTime); break; default: console.warn("IRLMod | Player Client: Unknown Pi message type:", message.type); } } catch (e) { console.error("IRLMod | Player Client: Error processing Pi message:", e, "Raw data:", event.data); } }
 function getTokensAtPoint(point) { /* Same */ if (!canvas.tokens?.placeables) return []; const tokens = []; for (const token of canvas.tokens.placeables) { const tokenDoc = token.document; if (token.visible && token.hitArea && token.hitArea.contains(point.x - tokenDoc.x, point.y - tokenDoc.y)) { tokens.push(token); } } return tokens.sort((a, b) => b.document.sort - a.document.sort); }
-function handlePiTouchDown(touch_id, canvasCoords, time) { /* Same as v2.59.8 */ const debounceDistSq = (canvas?.grid?.size ? (canvas.grid.size * 0.5) ** 2 : PI_MULTI_TOUCH_DIST_SQ_FALLBACK); for (const otherId in piTouches) { if (piTouches[otherId]) { const otherTouch = piTouches[otherId]; const timeDiff = time - otherTouch.startTime; const distSq = (canvasCoords.x - otherTouch.startCanvasCoords.x) ** 2 + (canvasCoords.y - otherTouch.startCanvasCoords.y) ** 2; if (timeDiff < PI_MULTI_TOUCH_DEBOUNCE_MS && distSq < debounceDistSq) { return; } } } let tokenUnderTouch = null; const tokens = getTokensAtPoint(canvasCoords); if (tokens.length > 0) { for (const t of tokens) { let isAssociatedWithOtherActiveTouch = false; for (const otherId in piTouches) { if (piTouches[otherId].selectedToken === t && piTouches[otherId].isDraggingConfirmed) { isAssociatedWithOtherActiveTouch = true; break; } } if (!isAssociatedWithOtherActiveTouch && (t.isOwner || game.user.isGM || t.document.testUserPermission(game.user, "LIMITED") || t.document.testUserPermission(game.user, "OBSERVER"))) { tokenUnderTouch = t; break; } } } piTouches[touch_id] = { canvasCoords: { ...canvasCoords }, startCanvasCoords: { ...canvasCoords }, startTime: time, selectedToken: tokenUnderTouch, isDraggingConfirmed: false, dragOffset: { x: 0, y: 0 } }; if (tokenUnderTouch) { const touchData = piTouches[touch_id]; const tokenCenterX = tokenUnderTouch.x + tokenUnderTouch.w / 2; const tokenCenterY = tokenUnderTouch.y + tokenUnderTouch.h / 2; touchData.dragOffset.x = canvasCoords.x - tokenCenterX; touchData.dragOffset.y = canvasCoords.y - tokenCenterY; } }
+function handlePiTouchDown(touch_id, canvasCoords, time) { /* Same as v2.59.8 */ const debounceDistSq = (canvas?.grid?.size ? (canvas.grid.size * 0.5) ** 2 : PI_MULTI_TOUCH_DIST_SQ_FALLBACK); for (const otherId in piTouches) { if (piTouches[otherId]) { const otherTouch = piTouches[otherId]; const timeDiff = time - otherTouch.startTime; const distSq = (canvasCoords.x - otherTouch.startCanvasCoords.x) ** 2 + (canvasCoords.y - otherTouch.startCanvasCoords.y) ** 2; if (timeDiff < PI_MULTI_TOUCH_DEBOUNCE_MS && distSq < debounceDistSq) { return; } } } let tokenUnderTouch = null; const tokens = getTokensAtPoint(canvasCoords); if (tokens.length > 0) { for (const t of tokens) { let isAssociatedWithOtherActiveTouch = false; for (const otherId in piTouches) { if (piTouches[otherId].selectedToken === t && piTouches[otherId].isDraggingConfirmed) { isAssociatedWithOtherActiveTouch = true; break; } } if (!isAssociatedWithOtherActiveTouch && (t.isOwner || game.user.isGM || t.document.testUserPermission(game.user, "LIMITED") || t.document.testUserPermission(game.user, "OBSERVER"))) { tokenUnderTouch = t; break; } } } piTouches[touch_id] = { canvasCoords: { ...canvasCoords }, startCanvasCoords: { ...canvasCoords }, startTime: time, selectedToken: tokenUnderTouch, isDraggingConfirmed: false, dragOffset: { x: 0, y: 0 }, positionCommitTimer: null }; if (tokenUnderTouch) { const touchData = piTouches[touch_id]; const tokenCenterX = tokenUnderTouch.x + tokenUnderTouch.w / 2; const tokenCenterY = tokenUnderTouch.y + tokenUnderTouch.h / 2; touchData.dragOffset.x = canvasCoords.x - tokenCenterX; touchData.dragOffset.y = canvasCoords.y - tokenCenterY; } }
 
 function handlePiTouchMove(touch_id, canvasCoords, time) {
     const touchData = piTouches[touch_id];
@@ -129,6 +130,18 @@ function handlePiTouchMove(touch_id, canvasCoords, time) {
                     visionRefreshThrottler = null;
                 }, VISION_REFRESH_THROTTLE_MS);
             }
+
+            if (!touchData.positionCommitTimer) {
+                touchData.positionCommitTimer = setTimeout(() => {
+                    touchData.positionCommitTimer = null;
+                    const tok = touchData.selectedToken;
+                    if (!tok || !canvas.tokens.get(tok.id)) return;
+                    tok.document.update(
+                        { x: tok.document.x, y: tok.document.y },
+                        { animate: false }
+                    ).catch(e => console.error("IRLMod | Pi: Error committing in-drag position", e));
+                }, POSITION_COMMIT_THROTTLE_MS);
+            }
         } catch (e) { console.error(`IRLMod | Pi: Error in touch_move for ID ${touch_id}`, e); delete piTouches[touch_id]; }
     }
 }
@@ -137,6 +150,7 @@ async function handlePiTouchUp(touch_id, canvasCoords, time) {
     if (visionRefreshThrottler) { clearTimeout(visionRefreshThrottler); visionRefreshThrottler = null; }
 
     const touchData = piTouches[touch_id]; if (!touchData) return;
+    if (touchData.positionCommitTimer) { clearTimeout(touchData.positionCommitTimer); touchData.positionCommitTimer = null; }
     if (touchData.selectedToken && !canvas.tokens.get(touchData.selectedToken.id)) { delete piTouches[touch_id]; return; }
 
     if (touchData.isDraggingConfirmed && touchData.selectedToken) {
@@ -234,4 +248,4 @@ function reapplyPlayerViewRestrictions() { /* Same as v2.59.5 */ if (game.user &
 Hooks.on("canvasInit", reapplyPlayerViewRestrictions); Hooks.on("canvasReady", reapplyPlayerViewRestrictions);
 Hooks.on("userInactive", (userId, inactive) => { /* Same as v2.59.5 */ if (game.user?.id === userId && inactive && game.user.name === DEDICATED_PLAYER_USER_NAME) { restorePlayerCanvasInteractions(); document.body.classList.remove('irlmod-player-view-active'); stopPersistentForceHide(); if (piWebSocket?.readyState === WebSocket.OPEN) piWebSocket.close(); piTouches = {}; lastPiFocusedToken = null; if (canvas?.tokens?.controlled?.length) canvas.tokens.releaseAll(); } });
 
-console.log("IRLMod | Player Client Script Loaded (v2.59.9 - Collision & Perception Fixes)");
+console.log("IRLMod | Player Client Script Loaded (v2.60.0 - Continuous Drag Position Sync)");
